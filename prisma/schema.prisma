@@ -1,0 +1,289 @@
+// =============================================================
+// ALMS — Automated Library Management System
+// Prisma Schema v1.0 | Supabase PostgreSQL
+// Aligned to SRS v1.0 & Data Dictionary v1.0
+// KNUST Computer Science Department — Group 10
+// =============================================================
+
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+ }
+
+// =============================================================
+// ENUM TYPES
+// Must be created before running migrations.
+// These map directly to the three PostgreSQL ENUM types
+// defined in the Data Dictionary §2.
+// =============================================================
+
+
+
+
+
+/// FR-03: Role assigned at registration. Defaults to 'student'.
+/// Checked on every API request via JWT claim (FR-04).
+enum user_role {
+  student
+  librarian
+  admin
+}
+
+/// Tracks the lifecycle of a loan record (FR-09, FR-11, FR-18).
+/// 'overdue' is set by the daily pg_cron job, not in real-time.
+enum loan_status {
+  active
+  returned
+  overdue
+}
+
+/// Tracks fine state for FR-18 overdue reporting.
+/// Payment processing is out of scope for v1.0 (SRS §6).
+/// Column retained for future billing integration.
+enum fine_status {
+  unpaid
+  paid
+  waived
+}
+
+// =============================================================
+// TABLE: users
+// SRS Refs: FR-01, FR-02, FR-03, FR-04
+// Central authentication and role table. Every system actor
+// (student, librarian, administrator) is a single row here.
+// Supports up to 5,000 registered members (NFR Scalability).
+// =============================================================
+
+model users {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// Required at registration (FR-01). Max 100 chars.
+  full_name     String    @db.VarChar(100)
+
+  /// Used as login credential (FR-02). Must be unique across all users.
+  /// Format validated at the Express.js layer, not in the DB.
+  email         String    @unique @db.VarChar(100)
+
+  /// bcrypt hash of the user password (cost factor >= 12).
+  /// Plain-text passwords are NEVER stored. Satisfies NFR Security.
+  password_hash String    @db.Text
+
+  /// PostgreSQL ENUM. Assigned on registration (FR-03). Defaults to 'student'.
+  role          user_role @default(student)
+
+  /// Soft-delete / account suspension flag.
+  /// FALSE disables login without physically deleting records.
+  is_active     Boolean   @default(true)
+
+  created_at    DateTime  @default(now()) @db.Timestamptz()
+
+  /// Maintained by trigger trg_users_updated_at.
+  updated_at    DateTime  @default(now()) @updatedAt @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  /// Books this user added to the catalogue (FR-08).
+  books_added      books[]          @relation("BookAddedBy")
+
+  /// Borrow records where this user is the borrowing member.
+  borrows          borrow_records[] @relation("BorrowUser")
+
+  /// Borrow records where this user is the processing librarian/admin.
+  loans_processed  borrow_records[] @relation("BorrowProcessedBy")
+
+  /// Fine records owed by this user (FR-18).
+  fines            fines[]          @relation("FineUser")
+
+  // ------------------------------------------------------------------
+  // INDEXES (Data Dictionary §2.1)
+  // ------------------------------------------------------------------
+  @@index([role],      name: "idx_users_role")       // Fast role filter for admin user management (FR-16)
+  @@index([is_active], name: "idx_users_is_active")  // Speeds up active-user queries at login
+}
+
+// =============================================================
+// TABLE: books
+// SRS Refs: FR-05, FR-06, FR-07, FR-08
+// Master catalogue of all library books. available_quantity is
+// updated by trigger on every borrow/return (FR-12), enabling
+// real-time availability checks without a JOIN.
+// Supports up to 10,000 records (NFR Scalability).
+// =============================================================
+
+model books {
+  id    String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// Full title. Required (FR-07). Supports full-text search (FR-05/FR-06).
+  title String @db.VarChar(255)
+
+  /// Author name(s). Required (FR-07). Multiple authors separated by semicolons.
+  author String @db.VarChar(255)
+
+  /// ISBN-10 or ISBN-13. Unique when not NULL (partial index).
+  /// NULL permitted for items without an ISBN.
+  isbn String? @unique @db.VarChar(13)
+
+  /// Genre / subject classification (e.g. 'Computer Science', 'Fiction').
+  /// Supports FR-06 filter by genre. Stored as a column per DD §8.2.
+  genre String? @db.VarChar(100)
+
+  /// Total physical copies owned by the library. Required (FR-07).
+  /// CHECK: quantity >= 0 — enforced via raw SQL migration.
+  quantity Int @default(1) @db.SmallInt
+
+  /// Copies currently available for borrowing.
+  /// Updated by trigger trg_update_availability on borrow/return (FR-12).
+  /// CHECK: available_quantity >= 0 AND available_quantity <= quantity.
+  available_quantity Int @default(1) @db.SmallInt
+
+  /// Librarian or admin who added this record (FR-08).
+  /// SET NULL when the staff account is deleted — book record is preserved.
+  added_by String? @db.Uuid
+
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  /// Maintained by trigger trg_books_updated_at.
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  added_by_user  users?           @relation("BookAddedBy", fields: [added_by], references: [id], onDelete: SetNull)
+  borrow_records borrow_records[]
+
+  // ------------------------------------------------------------------
+  // INDEXES (Data Dictionary §2.2)
+  // ------------------------------------------------------------------
+  @@index([title],              name: "idx_books_title")     // Title-based search/filter (FR-06)
+  @@index([author],             name: "idx_books_author")    // Author-based search/filter (FR-06)
+  @@index([genre],              name: "idx_books_genre")     // Genre filter (FR-06)
+  @@index([available_quantity], name: "idx_books_available") // Availability filter (FR-06)
+}
+
+// =============================================================
+// TABLE: borrow_records
+// SRS Refs: FR-09, FR-10, FR-11, FR-12, FR-13, FR-14, FR-15,
+//           FR-17, FR-18
+// Core loan tracking table. Created on borrow (FR-09).
+// due_date set by trigger to borrow_date + 14 days (FR-10).
+// The 5-book limit (FR-13) is enforced at the API layer (DD §8.3).
+// =============================================================
+
+model borrow_records {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The borrowing member.
+  /// RESTRICT delete — cannot delete a user who has loan records.
+  user_id String @db.Uuid
+
+  /// The book title borrowed.
+  /// RESTRICT delete — cannot delete a book that has loan history.
+  book_id String @db.Uuid
+
+  /// Librarian or admin who processed the loan. NULL if self-service.
+  /// SET NULL when the staff account is deleted — loan record is preserved.
+  processed_by String? @db.Uuid
+
+  /// Date the book was borrowed.
+  borrow_date DateTime @default(dbgenerated("CURRENT_DATE")) @db.Date
+
+  /// Return deadline. Set by trigger trg_set_due_date to borrow_date + 14 days (FR-10).
+  /// CHECK: due_date > borrow_date — enforced via raw SQL migration.
+  due_date DateTime @db.Date
+
+  /// Actual return date (FR-11). NULL while the book is still on loan.
+  /// CHECK: return_date >= borrow_date — enforced via raw SQL migration.
+  return_date DateTime? @db.Date
+
+  /// ENUM: 'active' / 'returned' / 'overdue'.
+  /// 'overdue' is set by the daily pg_cron job (DD §7).
+  /// Powers FR-14 (dashboard), FR-17 (admin view), FR-18 (overdue report).
+  status loan_status @default(active)
+
+  /// Optional librarian notes at time of borrowing or return.
+  notes String? @db.Text
+
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  /// Maintained by trigger trg_borrow_updated_at.
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  borrowing_user    users  @relation("BorrowUser",        fields: [user_id],      references: [id], onDelete: Restrict)
+  book              books  @relation(                      fields: [book_id],      references: [id], onDelete: Restrict)
+  processing_staff  users? @relation("BorrowProcessedBy", fields: [processed_by], references: [id], onDelete: SetNull)
+
+  /// One fine record may exist per overdue loan (FR-18).
+  fine fines?
+
+  // ------------------------------------------------------------------
+  // INDEXES (Data Dictionary §2.3)
+  // ------------------------------------------------------------------
+  @@index([user_id],         name: "idx_br_user_id")     // Member borrowing history (FR-15)
+  @@index([book_id],         name: "idx_br_book_id")     // All loans for a specific book (FR-17)
+  @@index([status],          name: "idx_br_status")      // Overdue loan filter (FR-18)
+  @@index([due_date],        name: "idx_br_due_date")    // Used by daily cron job
+  @@index([user_id, status], name: "idx_br_user_status") // Member dashboard (FR-14) + 5-book limit check (FR-13)
+}
+
+// =============================================================
+// TABLE: fines
+// SRS Refs: FR-18
+// Records fine amounts for overdue loans. Created automatically
+// by trigger trg_auto_overdue_fine when a loan transitions to
+// 'overdue'. Fine payment / billing integration is OUT OF SCOPE
+// for v1.0 (SRS §6). The status column is retained for future use.
+// =============================================================
+
+model fines {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The overdue loan that generated this fine.
+  /// UNIQUE — one fine record per overdue loan.
+  /// RESTRICT delete — cannot delete a loan with an associated fine.
+  borrow_id String @unique @db.Uuid
+
+  /// The member who owes the fine.
+  /// Denormalised from borrow_records for direct query performance.
+  /// RESTRICT delete — fine record is preserved even if user account is deactivated.
+  user_id String @db.Uuid
+
+  /// Total fine amount in GHS. Calculated at time of overdue detection.
+  /// Formula: days_overdue × 0.50 GHS (set by trigger trg_auto_overdue_fine).
+  /// CHECK: amount > 0 — enforced via raw SQL migration.
+  amount Decimal @db.Decimal(8, 2)
+
+  /// ENUM: 'unpaid' / 'paid' / 'waived'.
+  /// Payment processing is out of scope for v1.0 but the column
+  /// is retained for future billing integration (DD §8.5).
+  status fine_status @default(unpaid)
+
+  issued_at DateTime @default(now()) @db.Timestamptz()
+
+  /// Admin or librarian notes (e.g. reason for waiver).
+  notes String? @db.Text
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  borrow_record borrow_records @relation(fields: [borrow_id], references: [id], onDelete: Restrict)
+  user          users          @relation("FineUser", fields: [user_id], references: [id], onDelete: Restrict)
+
+  // ------------------------------------------------------------------
+  // INDEXES (Data Dictionary §2.4)
+  // ------------------------------------------------------------------
+  @@index([user_id], name: "idx_fines_user_id") // All fines for a member (FR-18)
+  @@index([status],  name: "idx_fines_status")  // Filters unpaid fines for reporting
+}

@@ -1,0 +1,261 @@
+<svg viewBox="0 0 1500 1180" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <pattern id="dotgrid" width="26" height="26" patternUnits="userSpaceOnUse">
+    <circle cx="1.5" cy="1.5" r="1.1" fill="#202b46" opacity="0.55"/>
+  </pattern>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
+    <feDropShadow dx="0" dy="5" stdDeviation="7" flood-color="#000000" flood-opacity="0.4"/>
+  </filter>
+  <linearGradient id="gUsers" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#4c8bf5"/><stop offset="1" stop-color="#1d4fc4"/>
+  </linearGradient>
+  <linearGradient id="gBooks" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#22c08f"/><stop offset="1" stop-color="#04875e"/>
+  </linearGradient>
+  <linearGradient id="gBorrow" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#fb9a4b"/><stop offset="1" stop-color="#c2540c"/>
+  </linearGradient>
+  <linearGradient id="gFines" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f4685f"/><stop offset="1" stop-color="#b91c2c"/>
+  </linearGradient>
+  <clipPath id="cUsers"><rect x="50" y="100" width="300" height="244" rx="10"/></clipPath>
+  <clipPath id="cBooks"><rect x="1110" y="100" width="300" height="296" rx="10"/></clipPath>
+  <clipPath id="cBorrow"><rect x="560" y="460" width="340" height="322" rx="10"/></clipPath>
+  <clipPath id="cFines"><rect x="560" y="860" width="320" height="218" rx="10"/></clipPath>
+  <style>
+    text{font-family:'Segoe UI',Arial,sans-serif;}
+    .maintitle{font-size:25px;font-weight:700;fill:#f4f6fb;}
+    .subtitle{font-size:12.5px;fill:#8a93b3;}
+    .tname{font-size:14.5px;font-weight:700;fill:#ffffff;letter-spacing:.4px;}
+    .tcount{font-size:9px;fill:rgba(255,255,255,.78);}
+    .rname{font-size:12.2px;fill:#d8dfee;}
+    .rtype{font-size:9.8px;fill:#7c87a8;font-family:Consolas,Monaco,monospace;}
+    .bdg{font-size:7.5px;font-weight:700;font-family:Consolas,Monaco,monospace;}
+    .div{stroke:#2a3450;stroke-width:1;opacity:.7;}
+    .ntitle{font-size:11.5px;font-weight:700;letter-spacing:.6px;}
+    .nname{font-size:10.3px;font-weight:700;fill:#d8dfee;font-family:Consolas,Monaco,monospace;}
+    .ndesc{font-size:9.2px;fill:#8b96b3;}
+    .rlabel{font-size:8.8px;font-weight:700;font-family:Consolas,Monaco,monospace;}
+    .legend{font-size:10.5px;fill:#9aa4c0;}
+    .footer{font-size:10px;fill:#525c78;}
+  </style>
+</defs>
+
+<rect x="0" y="0" width="1500" height="1180" fill="#0c111f"/>
+<rect x="0" y="0" width="1500" height="1180" fill="url(#dotgrid)"/>
+
+<text x="750" y="42" text-anchor="middle" class="maintitle">Automated Library Management System</text>
+<text x="750" y="64" text-anchor="middle" class="subtitle">Entity-Relationship Diagram  ·  Supabase PostgreSQL  ·  Prisma ORM  ·  Schema v1.0</text>
+
+<!-- ============ RELATIONSHIP LINES (drawn first, under tables) ============ -->
+<path d="M350,149 C460,149 460,535 560,535" fill="none" stroke="#5b9bf5" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M350,149 C480,149 480,587 560,587" fill="none" stroke="#5b9bf5" stroke-width="1.8" stroke-dasharray="7 5" stroke-linecap="round"/>
+<path d="M350,149 C650,149 850,331 1110,331" fill="none" stroke="#2dd4bf" stroke-width="1.8" stroke-dasharray="7 5" stroke-linecap="round"/>
+<path d="M1110,149 C1000,149 1000,561 900,561" fill="none" stroke="#34d399" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M560,509 C470,509 470,935 560,935" fill="none" stroke="#fb923c" stroke-width="1.8" stroke-linecap="round"/>
+<path d="M350,149 C420,149 420,961 560,961" fill="none" stroke="#f472b6" stroke-width="1.8" stroke-linecap="round"/>
+
+<!-- ============ USERS TABLE ============ -->
+<g filter="url(#shadow)">
+  <rect x="50" y="100" width="300" height="244" rx="10" fill="#182032" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<g clip-path="url(#cUsers)">
+  <rect x="50" y="162" width="300" height="26" fill="#1d2640"/>
+  <rect x="50" y="214" width="300" height="26" fill="#1d2640"/>
+  <rect x="50" y="266" width="300" height="26" fill="#1d2640"/>
+  <rect x="50" y="318" width="300" height="26" fill="#1d2640"/>
+  <path d="M60,100 L340,100 Q350,100 350,110 L350,136 L50,136 L50,110 Q50,100 60,100 Z" fill="url(#gUsers)"/>
+</g>
+<text x="66" y="123" class="tname">users</text>
+<text x="336" y="121" text-anchor="end" class="tcount">8 columns</text>
+<g stroke="#2a3450">
+  <line class="div" x1="50" y1="162" x2="350" y2="162"/><line class="div" x1="50" y1="188" x2="350" y2="188"/>
+  <line class="div" x1="50" y1="214" x2="350" y2="214"/><line class="div" x1="50" y1="240" x2="350" y2="240"/>
+  <line class="div" x1="50" y1="266" x2="350" y2="266"/><line class="div" x1="50" y1="292" x2="350" y2="292"/>
+  <line class="div" x1="50" y1="318" x2="350" y2="318"/>
+</g>
+<rect x="63" y="142" width="18" height="14" rx="4" fill="#fbbf24"/><text x="72" y="151.7" text-anchor="middle" class="bdg" fill="#1a1f2e">PK</text>
+<text x="94" y="153" class="rname">id</text><text x="336" y="153" text-anchor="end" class="rtype">UUID</text>
+<text x="94" y="179" class="rname">full_name</text><text x="336" y="179" text-anchor="end" class="rtype">VARCHAR(100)</text>
+<rect x="85" y="194" width="18" height="14" rx="4" fill="#a78bfa"/><text x="94" y="203.7" text-anchor="middle" class="bdg" fill="#fff">UQ</text>
+<text x="94" y="205" class="rname" x2="0">email</text><text x="336" y="205" text-anchor="end" class="rtype">VARCHAR(100)</text>
+<text x="94" y="231" class="rname">password_hash</text><text x="336" y="231" text-anchor="end" class="rtype">TEXT</text>
+<text x="94" y="257" class="rname">role</text><text x="336" y="257" text-anchor="end" class="rtype">user_role</text>
+<text x="94" y="283" class="rname">is_active</text><text x="336" y="283" text-anchor="end" class="rtype">BOOLEAN</text>
+<text x="94" y="309" class="rname">created_at</text><text x="336" y="309" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+<text x="94" y="335" class="rname">updated_at</text><text x="336" y="335" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+
+<!-- ============ BOOKS TABLE ============ -->
+<g filter="url(#shadow)">
+  <rect x="1110" y="100" width="300" height="296" rx="10" fill="#182032" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<g clip-path="url(#cBooks)">
+  <rect x="1110" y="162" width="300" height="26" fill="#1d2640"/>
+  <rect x="1110" y="214" width="300" height="26" fill="#1d2640"/>
+  <rect x="1110" y="266" width="300" height="26" fill="#1d2640"/>
+  <rect x="1110" y="318" width="300" height="26" fill="#1d2640"/>
+  <rect x="1110" y="370" width="300" height="26" fill="#1d2640"/>
+  <path d="M1120,100 L1400,100 Q1410,100 1410,110 L1410,136 L1110,136 L1110,110 Q1110,100 1120,100 Z" fill="url(#gBooks)"/>
+</g>
+<text x="1126" y="123" class="tname">books</text>
+<text x="1396" y="121" text-anchor="end" class="tcount">10 columns</text>
+<g>
+  <line class="div" x1="1110" y1="162" x2="1410" y2="162"/><line class="div" x1="1110" y1="188" x2="1410" y2="188"/>
+  <line class="div" x1="1110" y1="214" x2="1410" y2="214"/><line class="div" x1="1110" y1="240" x2="1410" y2="240"/>
+  <line class="div" x1="1110" y1="266" x2="1410" y2="266"/><line class="div" x1="1110" y1="292" x2="1410" y2="292"/>
+  <line class="div" x1="1110" y1="318" x2="1410" y2="318"/><line class="div" x1="1110" y1="344" x2="1410" y2="344"/>
+  <line class="div" x1="1110" y1="370" x2="1410" y2="370"/>
+</g>
+<rect x="1123" y="142" width="18" height="14" rx="4" fill="#fbbf24"/><text x="1132" y="151.7" text-anchor="middle" class="bdg" fill="#1a1f2e">PK</text>
+<text x="1154" y="153" class="rname">id</text><text x="1396" y="153" text-anchor="end" class="rtype">UUID</text>
+<text x="1154" y="179" class="rname">title</text><text x="1396" y="179" text-anchor="end" class="rtype">VARCHAR(255)</text>
+<text x="1154" y="205" class="rname">author</text><text x="1396" y="205" text-anchor="end" class="rtype">VARCHAR(255)</text>
+<rect x="1145" y="220" width="18" height="14" rx="4" fill="#a78bfa"/><text x="1154" y="229.7" text-anchor="middle" class="bdg" fill="#fff">UQ</text>
+<text x="1154" y="231" class="rname" font-style="italic">isbn</text><text x="1396" y="231" text-anchor="end" class="rtype">VARCHAR(13)</text>
+<text x="1154" y="257" class="rname" font-style="italic">genre</text><text x="1396" y="257" text-anchor="end" class="rtype">VARCHAR(100)</text>
+<text x="1154" y="283" class="rname">quantity</text><text x="1396" y="283" text-anchor="end" class="rtype">SMALLINT</text>
+<text x="1154" y="309" class="rname">available_quantity</text><text x="1396" y="309" text-anchor="end" class="rtype">SMALLINT</text>
+<rect x="1145" y="324" width="18" height="14" rx="4" fill="#3b82f6"/><text x="1154" y="333.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<text x="1154" y="335" class="rname" font-style="italic">added_by</text><text x="1396" y="335" text-anchor="end" class="rtype">UUID</text>
+<text x="1154" y="361" class="rname">created_at</text><text x="1396" y="361" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+<text x="1154" y="387" class="rname">updated_at</text><text x="1396" y="387" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+
+<!-- ============ BORROW_RECORDS TABLE ============ -->
+<g filter="url(#shadow)">
+  <rect x="560" y="460" width="340" height="322" rx="10" fill="#182032" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<g clip-path="url(#cBorrow)">
+  <rect x="560" y="522" width="340" height="26" fill="#1d2640"/>
+  <rect x="560" y="574" width="340" height="26" fill="#1d2640"/>
+  <rect x="560" y="626" width="340" height="26" fill="#1d2640"/>
+  <rect x="560" y="678" width="340" height="26" fill="#1d2640"/>
+  <rect x="560" y="730" width="340" height="26" fill="#1d2640"/>
+  <path d="M570,460 L890,460 Q900,460 900,470 L900,496 L560,496 L560,470 Q560,460 570,460 Z" fill="url(#gBorrow)"/>
+</g>
+<text x="576" y="483" class="tname">borrow_records</text>
+<text x="886" y="481" text-anchor="end" class="tcount">11 columns</text>
+<g>
+  <line class="div" x1="560" y1="522" x2="900" y2="522"/><line class="div" x1="560" y1="548" x2="900" y2="548"/>
+  <line class="div" x1="560" y1="574" x2="900" y2="574"/><line class="div" x1="560" y1="600" x2="900" y2="600"/>
+  <line class="div" x1="560" y1="626" x2="900" y2="626"/><line class="div" x1="560" y1="652" x2="900" y2="652"/>
+  <line class="div" x1="560" y1="678" x2="900" y2="678"/><line class="div" x1="560" y1="704" x2="900" y2="704"/>
+  <line class="div" x1="560" y1="730" x2="900" y2="730"/><line class="div" x1="560" y1="756" x2="900" y2="756"/>
+</g>
+<rect x="573" y="502" width="18" height="14" rx="4" fill="#fbbf24"/><text x="582" y="511.7" text-anchor="middle" class="bdg" fill="#1a1f2e">PK</text>
+<text x="604" y="513" class="rname">id</text><text x="886" y="513" text-anchor="end" class="rtype">UUID</text>
+<rect x="573" y="528" width="18" height="14" rx="4" fill="#3b82f6"/><text x="582" y="537.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<text x="604" y="539" class="rname">user_id</text><text x="886" y="539" text-anchor="end" class="rtype">UUID</text>
+<rect x="573" y="554" width="18" height="14" rx="4" fill="#3b82f6"/><text x="582" y="563.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<text x="604" y="565" class="rname">book_id</text><text x="886" y="565" text-anchor="end" class="rtype">UUID</text>
+<rect x="573" y="580" width="18" height="14" rx="4" fill="#3b82f6"/><text x="582" y="589.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<text x="604" y="591" class="rname" font-style="italic">processed_by</text><text x="886" y="591" text-anchor="end" class="rtype">UUID</text>
+<text x="604" y="617" class="rname">borrow_date</text><text x="886" y="617" text-anchor="end" class="rtype">DATE</text>
+<text x="604" y="643" class="rname">due_date</text><text x="886" y="643" text-anchor="end" class="rtype">DATE</text>
+<text x="604" y="669" class="rname" font-style="italic">return_date</text><text x="886" y="669" text-anchor="end" class="rtype">DATE</text>
+<text x="604" y="695" class="rname">status</text><text x="886" y="695" text-anchor="end" class="rtype">loan_status</text>
+<text x="604" y="721" class="rname" font-style="italic">notes</text><text x="886" y="721" text-anchor="end" class="rtype">TEXT</text>
+<text x="604" y="747" class="rname">created_at</text><text x="886" y="747" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+<text x="604" y="773" class="rname">updated_at</text><text x="886" y="773" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+
+<!-- ============ FINES TABLE ============ -->
+<g filter="url(#shadow)">
+  <rect x="560" y="860" width="320" height="218" rx="10" fill="#182032" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<g clip-path="url(#cFines)">
+  <rect x="560" y="922" width="320" height="26" fill="#1d2640"/>
+  <rect x="560" y="974" width="320" height="26" fill="#1d2640"/>
+  <rect x="560" y="1026" width="320" height="26" fill="#1d2640"/>
+  <path d="M570,860 L870,860 Q880,860 880,870 L880,896 L560,896 L560,870 Q560,860 570,860 Z" fill="url(#gFines)"/>
+</g>
+<text x="576" y="883" class="tname">fines</text>
+<text x="866" y="881" text-anchor="end" class="tcount">7 columns</text>
+<g>
+  <line class="div" x1="560" y1="922" x2="880" y2="922"/><line class="div" x1="560" y1="948" x2="880" y2="948"/>
+  <line class="div" x1="560" y1="974" x2="880" y2="974"/><line class="div" x1="560" y1="1000" x2="880" y2="1000"/>
+  <line class="div" x1="560" y1="1026" x2="880" y2="1026"/><line class="div" x1="560" y1="1052" x2="880" y2="1052"/>
+</g>
+<rect x="573" y="902" width="18" height="14" rx="4" fill="#fbbf24"/><text x="582" y="911.7" text-anchor="middle" class="bdg" fill="#1a1f2e">PK</text>
+<text x="604" y="913" class="rname">id</text><text x="866" y="913" text-anchor="end" class="rtype">UUID</text>
+<rect x="573" y="928" width="18" height="14" rx="4" fill="#3b82f6"/><text x="582" y="937.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<rect x="595" y="928" width="18" height="14" rx="4" fill="#a78bfa"/><text x="604" y="937.7" text-anchor="middle" class="bdg" fill="#fff">UQ</text>
+<text x="626" y="939" class="rname">borrow_id</text><text x="866" y="939" text-anchor="end" class="rtype">UUID</text>
+<rect x="573" y="954" width="18" height="14" rx="4" fill="#3b82f6"/><text x="582" y="963.7" text-anchor="middle" class="bdg" fill="#fff">FK</text>
+<text x="604" y="965" class="rname">user_id</text><text x="866" y="965" text-anchor="end" class="rtype">UUID</text>
+<text x="604" y="991" class="rname">amount</text><text x="866" y="991" text-anchor="end" class="rtype">NUMERIC(8,2)</text>
+<text x="604" y="1017" class="rname">status</text><text x="866" y="1017" text-anchor="end" class="rtype">fine_status</text>
+<text x="604" y="1043" class="rname">issued_at</text><text x="866" y="1043" text-anchor="end" class="rtype">TIMESTAMPTZ</text>
+<text x="604" y="1069" class="rname" font-style="italic">notes</text><text x="866" y="1069" text-anchor="end" class="rtype">TEXT</text>
+
+<!-- ============ ENUM TYPES NOTE BOX ============ -->
+<g filter="url(#shadow)">
+  <rect x="1110" y="460" width="300" height="200" rx="10" fill="#141b2e" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<rect x="1110" y="460" width="4" height="200" fill="#38bdf8"/>
+<text x="1132" y="483" class="ntitle" fill="#38bdf8">ENUM TYPES</text>
+<line x1="1122" y1="494" x2="1394" y2="494" class="div"/>
+<text x="1132" y="518" class="nname" fill="#60a5fa">user_role</text>
+<text x="1132" y="536" class="ndesc">student · librarian · admin</text>
+<text x="1132" y="560" class="nname" fill="#60a5fa">loan_status</text>
+<text x="1132" y="578" class="ndesc">active · returned · overdue</text>
+<text x="1132" y="602" class="nname" fill="#60a5fa">fine_status</text>
+<text x="1132" y="620" class="ndesc">unpaid · paid · waived</text>
+
+<!-- ============ KEY TRIGGERS NOTE BOX ============ -->
+<g filter="url(#shadow)">
+  <rect x="1110" y="680" width="300" height="220" rx="10" fill="#141b2e" stroke="#2d3a56" stroke-width="1.4"/>
+</g>
+<rect x="1110" y="680" width="4" height="220" fill="#fb923c"/>
+<text x="1132" y="703" class="ntitle" fill="#fb923c">KEY TRIGGERS &amp; JOBS</text>
+<line x1="1122" y1="714" x2="1394" y2="714" class="div"/>
+<text x="1132" y="732" class="nname">trg_set_due_date</text>
+<text x="1132" y="748" class="ndesc">due_date = borrow_date + 14d</text>
+<text x="1132" y="774" class="nname">trg_update_availability</text>
+<text x="1132" y="790" class="ndesc">syncs books.available_quantity</text>
+<text x="1132" y="816" class="nname">trg_auto_overdue_fine</text>
+<text x="1132" y="832" class="ndesc">creates fine when status → overdue</text>
+<text x="1132" y="858" class="nname">pg_cron (daily)</text>
+<text x="1132" y="874" class="ndesc">active → overdue status sweep</text>
+
+<!-- ============ RELATIONSHIP LABELS (drawn on top of lines) ============ -->
+<rect x="400" y="327" width="118" height="20" rx="10" fill="#11182a" stroke="#5b9bf5" stroke-width="1.2"/>
+<text x="459" y="340.3" text-anchor="middle" class="rlabel" fill="#5b9bf5">1:N  BORROWS</text>
+
+<rect x="415" y="363" width="118" height="20" rx="10" fill="#11182a" stroke="#5b9bf5" stroke-width="1.2"/>
+<text x="474" y="376.3" text-anchor="middle" class="rlabel" fill="#5b9bf5">1:N  PROCESSES</text>
+
+<rect x="686" y="230" width="118" height="20" rx="10" fill="#11182a" stroke="#2dd4bf" stroke-width="1.2"/>
+<text x="745" y="243.3" text-anchor="middle" class="rlabel" fill="#2dd4bf">1:N  ADDS</text>
+
+<rect x="942" y="345" width="118" height="20" rx="10" fill="#11182a" stroke="#34d399" stroke-width="1.2"/>
+<text x="1001" y="358.3" text-anchor="middle" class="rlabel" fill="#34d399">1:N  BORROWED</text>
+
+<rect x="434" y="712" width="118" height="20" rx="10" fill="#11182a" stroke="#fb923c" stroke-width="1.2"/>
+<text x="493" y="725.3" text-anchor="middle" class="rlabel" fill="#fb923c">1:1  GENERATES</text>
+
+<rect x="370" y="545" width="118" height="20" rx="10" fill="#11182a" stroke="#f472b6" stroke-width="1.2"/>
+<text x="429" y="558.3" text-anchor="middle" class="rlabel" fill="#f472b6">1:N  OWES</text>
+
+<!-- ============ CONNECTION DOTS ============ -->
+<circle cx="350" cy="149" r="4.5" fill="#ffd34d" stroke="#0c111f" stroke-width="1.5"/>
+<circle cx="560" cy="535" r="3.5" fill="#5b9bf5" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="560" cy="587" r="3.5" fill="#5b9bf5" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="1110" cy="331" r="3.5" fill="#2dd4bf" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="1110" cy="149" r="3.5" fill="#34d399" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="900" cy="561" r="3.5" fill="#34d399" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="560" cy="509" r="3.5" fill="#fb923c" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="560" cy="935" r="3.5" fill="#fb923c" stroke="#0c111f" stroke-width="1.2"/>
+<circle cx="560" cy="961" r="3.5" fill="#f472b6" stroke="#0c111f" stroke-width="1.2"/>
+
+<!-- ============ LEGEND ============ -->
+<line x1="80" y1="1100" x2="1420" y2="1100" stroke="#23304a" stroke-width="1"/>
+<text x="750" y="1122" text-anchor="middle" class="legend">
+<tspan fill="#fbbf24" font-weight="700">PK</tspan> Primary Key&#160;&#160;&#160;&#160;
+<tspan fill="#3b82f6" font-weight="700">FK</tspan> Foreign Key&#160;&#160;&#160;&#160;
+<tspan fill="#a78bfa" font-weight="700">UQ</tspan> Unique Constraint&#160;&#160;&#160;&#160;
+<tspan fill="#cdd5e8">───</tspan> Required Relationship&#160;&#160;&#160;&#160;
+<tspan fill="#cdd5e8">┄┄┄</tspan> Optional / Nullable FK&#160;&#160;&#160;&#160;
+<tspan font-style="italic" fill="#8a93b3">italic</tspan> = nullable column
+</text>
+<text x="750" y="1152" text-anchor="middle" class="footer">KNUST Computer Science Department  ·  Group 10  ·  ALMS Data Dictionary v1.0  ·  June 2026</text>
+
+</svg>
