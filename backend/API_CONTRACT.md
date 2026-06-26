@@ -94,4 +94,52 @@ ERROR RESPONSES:
 }
 
 
+
+## Authentication Service
+
+### Request Password Reset
+Initiates the password recovery flow by generating a secure reset token and dispatching a recovery link to the user's registered email address.
+
+* **URL:** `/api/auth/forgot-password`
+* **Method:** `POST`
+* **Auth Required:** No
+* **Content-Type:** `application/json`
+
+#### Request Body
+
+| Field | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `email` | `string` | **Yes** | The registered email address of the user requesting a password reset. |
+
+```json
+{
+  "email": "user@example.com"
+}
+
+##Success Response
+ 200 OK
+{
+  "message": "If the email exists, a password reset link has been sent.",
+  "data": {}
+}
+
+
+
+##Error Responses 
+400 BAD REQUEST(Missing required fiels in the request payload)
+
+{
+  "error": "Email is required."
+}
+
+
+500 INTERNAL SERVER ERROR (Network timeout or database infrastructure communication failure(smtp config issues))
+
+{
+  "error": "Failed to communicate with the Auth server.",
+  "details": "Network/URL connection issue"
+}
+
+
+
 #                               Dev B:

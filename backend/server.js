@@ -24,6 +24,13 @@ app.get('/', (req, res) => {
   });
 });
 
+app.use( (err,req,res,next) =>{
+    console.error("❌ Global Error Handler:", err);
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal Server Error'
+    });
+} );
 
 app.listen(PORT, () => {
   console.log(`🚀 Backend server actively running on port ${PORT}`);
