@@ -2,6 +2,42 @@ const supabase = require('../config/supabaseClient');
 
 
 
+const forgotPassword = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required.' });
+  }
+
+  try { 
+
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+    // const {data,error} = {data: null, error: null}; // Placeholder for demonstration;
+
+    // 2. Safely check for a Supabase API error
+    if (error) {
+      return res.status(error.status && error.status >= 400 && error.status < 600 ? error.status : 400)
+        .json({ error: error || 'Supabase authentication error.' });
+    }
+
+    return res.status(200).json({ 
+      message: 'If the email exists, a password reset link has been sent.',
+      data: data || {} 
+    });
+    
+  } catch (err) {
+    // 3. This will print the REAL error to your terminal running the server
+    console.error("❌ Forgot Password Error Details:", err);
+
+    // 4. Send back the actual message string instead of the raw object
+    return res.status(500).json({ 
+      error: 'Internal server error.',
+      details: err.message || 'Unknown error occurred'
+    });
+  }
+};
+
+
 // 2. POST /api/auth/login
 const login = async (req, res) => {
   const { email, password } = req.body;
@@ -77,5 +113,6 @@ const getProfile = async (req, res) => {
 
 module.exports = {
   login,
-  getProfile
+  getProfile,
+  forgotPassword
 };
