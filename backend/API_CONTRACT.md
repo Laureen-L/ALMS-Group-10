@@ -143,3 +143,96 @@ Initiates the password recovery flow by generating a secure reset token and disp
 
 
 #                               Dev B:
+# 📚 Books API Contract (Catalog Management)
+**Developer:** Dev B  
+**Base URL:** `/api/books`  
+**Feature Requirements:** FR-05, FR-06, FR-07, FR-08  
+
+---
+
+### 1. Get All Books (with optional filters)
+**Endpoint:** `GET /`  
+**Query Parameters:** * `?search=` (string) - Filters by title (case-insensitive)
+* `?genre=` (string) - Filters by exact genre match
+
+**Response (200 OK):**
+```json
+[
+  {
+    "id": "uuid-string",
+    "title": "The Pragmatic Programmer",
+    "author": "David Thomas",
+    "genre": "Technology",
+    "published_year": 1999,
+    "created_at": "2026-06-26T21:00:00.000Z"
+  }
+]
+###2. Get Book by ID
+Endpoint: GET /:id
+Response (200 OK):
+{
+  "id": "uuid-string",
+  "title": "The Pragmatic Programmer",
+  "author": "David Thomas",
+  "genre": "Technology",
+  "published_year": 1999,
+  "created_at": "2026-06-26T21:00:00.000Z"
+}
+Error Response (404 Not Found):
+JSON
+{
+  "message": "Book not found"
+}
+3. Create a Book (Admin/Librarian Only)
+Endpoint: POST /
+Headers: Authorization: Bearer <token>
+Request Body:
+JSON
+{
+  "title": "Clean Code",
+  "author": "Robert C. Martin",
+  "genre": "Technology",
+  "published_year": 2008
+}
+Response (201 Created):
+JSON
+{
+  "message": "Book created successfully",
+  "book": {
+    "id": "new-uuid-string",
+    "title": "Clean Code",
+    "author": "Robert C. Martin",
+    "genre": "Technology",
+    "published_year": 2008,
+    "created_at": "2026-06-26T22:00:00.000Z"
+  }
+}
+4. Update a Book (Admin/Librarian Only)
+Endpoint: PUT /:id
+Headers: Authorization: Bearer <token>
+Request Body (Partial updates allowed):
+JSON
+{
+  "genre": "Software Engineering"
+}
+Response (200 OK):
+JSON
+{
+  "message": "Book updated successfully",
+  "book": {
+    "id": "uuid-string",
+    "title": "Clean Code",
+    "author": "Robert C. Martin",
+    "genre": "Software Engineering",
+    "published_year": 2008,
+    "created_at": "2026-06-26T22:00:00.000Z"
+  }
+}
+5. Delete a Book (Admin/Librarian Only)
+Endpoint: DELETE /:id
+Headers: Authorization: Bearer <token>
+Response (200 OK):
+JSON
+{
+  "message": "Book deleted successfully"
+}
