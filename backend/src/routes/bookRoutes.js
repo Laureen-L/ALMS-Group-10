@@ -8,8 +8,8 @@ const {
     deleteBook
 } = require('../controllers/bookController');
 
-//imported the middleware here as named(sample.middleware.js)
-const { requireAuth, requireRole } = require('../middleware/sample.middleware');
+//imported the middleware here as named(authMiddleware)
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 // Public endpoints (FR-05, FR-06, FR-07)
 router.get('/', getBooks);
