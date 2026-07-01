@@ -1,0 +1,53 @@
+/* Design tokens — the single source of truth, read off the ALMS screenshots.
+   Tune the hex values here and every screen updates. */
+:root {
+  /* Green — chrome, headings, active states */
+  --green-900: #1f5c43;   /* deep heading green */
+  --green-700: #2f7a57;
+  --green-600: #3f8f67;   /* primary green */
+  --green-500: #5fa37f;   /* header bars */
+  --green-100: #e3f0e9;   /* soft green fill */
+
+  /* Gold — primary action buttons (Borrow, Update, Export, Search) */
+  --gold-600: #b8973f;
+  --gold-500: #c2a14d;
+  --gold-100: #f3ebd6;
+
+  /* Surfaces */
+  --cream: #f7f5ee;       /* app background */
+  --cream-dark: #efece1;  /* student sidebar */
+  --surface: #ffffff;
+
+  /* Status */
+  --red-600: #c0392b;     /* critical / overdue */
+  --red-100: #fbe7e4;
+  --amber-600: #d99a00;   /* due soon / low stock */
+  --amber-100: #faf0d4;
+
+  /* Text + lines */
+  --ink: #1f2933;
+  --muted: #6b7280;
+  --border: #e9e6dd;
+  --border-soft: #f1efe8;
+
+  /* Type */
+  --font-display: "Poppins", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+
+  /* Radius */
+  --radius-sm: 8px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Elevation */
+  --shadow-sm: 0 1px 2px rgba(31, 41, 51, 0.06);
+  --shadow: 0 6px 20px rgba(31, 41, 51, 0.08);
+
+  /* Spacing step */
+  --space: 8px;
+
+  /* Layout */
+  --sidebar-w: 248px;
+  --topbar-h: 72px;
+}
