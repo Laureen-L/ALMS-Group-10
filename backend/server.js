@@ -12,7 +12,7 @@ app.use(express.json());
 // Main Resource Routing Matrix
 app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/books', require('./src/routes/bookRoutes'));
-app.use('/api/borrow', require('./src/routes/borrowRoutes'));
+app.use('/api', require('./src/routes/borrowRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
 
 //Base Health-Check Route

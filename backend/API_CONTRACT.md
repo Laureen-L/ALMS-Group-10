@@ -236,3 +236,99 @@ JSON
 {
   "message": "Book deleted successfully"
 }
+
+
+---
+
+#                               Dev C:
+# 🔄 Borrow/Return API Contract (Library Logic)
+**Developer:** Dev C  
+**Base URL:** `/api`  
+**Feature Requirements:** FR-09, FR-10, FR-11, FR-12, FR-13  
+
+---
+
+### 1. Borrow a Book
+**Endpoint:** `POST /api/borrow`  
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "bookId": "uuid-string"
+}
+```
+
+**Success Response (201 Created):**
+```json
+{
+  "message": "Book borrowed successfully",
+  "borrow": {
+    "id": "uuid-string",
+    "user_id": "uuid-string",
+    "book_id": "uuid-string",
+    "borrow_date": "2026-07-02T00:00:00.000Z",
+    "due_date": "2026-07-16T00:00:00.000Z",
+    "status": "active"
+  }
+}
+```
+
+**Error Responses:**
+
+400 Bad Request (Borrow limit reached)
+```json
+{ "error": "Borrow limit reached. You cannot have more than 5 active borrows." }
+```
+
+400 Bad Request (No copies available)
+```json
+{ "error": "No available copies of this book" }
+```
+
+404 Not Found (Book does not exist)
+```json
+{ "error": "Book not found" }
+```
+
+---
+
+### 2. Return a Book
+**Endpoint:** `POST /api/return`  
+**Headers:** `Authorization: Bearer <token>`
+
+**Request Body:**
+```json
+{
+  "borrowId": "uuid-string"
+}
+```
+
+**Success Response (200 OK):**
+```json
+{
+  "message": "Book returned successfully",
+  "borrow": {
+    "id": "uuid-string",
+    "status": "returned",
+    "return_date": "2026-07-02T00:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+
+400 Bad Request (Already returned)
+```json
+{ "error": "This book has already been returned" }
+```
+
+403 Forbidden (Not your borrow record)
+```json
+{ "error": "This borrow record does not belong to you" }
+```
+
+404 Not Found (Borrow record does not exist)
+```json
+{ "error": "Borrow record not found" }
+```
