@@ -331,4 +331,157 @@ JSON
 404 Not Found (Borrow record does not exist)
 ```json
 { "error": "Borrow record not found" }
+#                               Dev D:
+# 📊 Dashboards & Admin API Contract
+**Developer:** Dev D  
+**Base URL:** `/api/admin`  
+**Feature Requirements:** FR-14, FR-15, FR-16, FR-17, FR-18  
+
+---
+
+### 1. Student Dashboard
+**Endpoint:** `GET /api/admin/student/dashboard/:id`  
+**Headers:** `Authorization: Bearer <token>`
+
+**Success Response (200 OK):**
+```json
+{
+  "activeLoans": [
+    {
+      "id": "uuid-string",
+      "book_id": "uuid-string",
+      "borrow_date": "2026-07-02T00:00:00.000Z",
+      "due_date": "2026-07-16T00:00:00.000Z",
+      "status": "active",
+      "books": {
+        "id": "uuid-string",
+        "title": "Clean Code",
+        "author": "Robert C. Martin",
+        "genre": "Technology"
+      }
+    }
+  ],
+  "overdueLoans": [],
+  "borrowHistory": [],
+  "summary": {
+    "totalActive": 1,
+    "totalOverdue": 0,
+    "totalBorrowed": 3
+  }
+}
+```
+
+---
+
+### 2. Librarian Dashboard
+**Endpoint:** `GET /api/admin/librarian/dashboard`  
+**Headers:** `Authorization: Bearer <token>` (librarian or admin role)
+
+**Success Response (200 OK):**
+```json
+{
+  "stats": {
+    "totalBooks": 240,
+    "activeLoans": 32,
+    "overdueLoans": 4
+  },
+  "recentActivity": [],
+  "overdueList": []
+}
+```
+
+---
+
+### 3. Get All Members
+**Endpoint:** `GET /api/admin/members`  
+**Headers:** `Authorization: Bearer <token>` (admin only)
+
+**Success Response (200 OK):**
+```json
+[
+  {
+    "id": "uuid-string",
+    "full_name": "Kwame Mensah",
+    "email": "student@knust.edu.gh",
+    "role": "student",
+    "created_at": "2026-06-26T21:00:00.000Z"
+  }
+]
+```
+
+---
+
+### 4. Get All Borrow Records
+**Endpoint:** `GET /api/admin/borrow-records`  
+**Headers:** `Authorization: Bearer <token>` (admin or librarian)
+
+**Success Response (200 OK):**
+```json
+[
+  {
+    "id": "uuid-string",
+    "user_id": "uuid-string",
+    "book_id": "uuid-string",
+    "borrow_date": "2026-07-02T00:00:00.000Z",
+    "due_date": "2026-07-16T00:00:00.000Z",
+    "status": "active",
+    "books": {
+      "title": "Clean Code",
+      "author": "Robert C. Martin",
+      "isbn": "978-0132350884"
+    }
+  }
+]
+```
+
+---
+
+### 5. Get Overdue Records
+**Endpoint:** `GET /api/admin/overdue`  
+**Headers:** `Authorization: Bearer <token>` (admin or librarian)
+
+**Success Response (200 OK):**
+```json
+[
+  {
+    "id": "uuid-string",
+    "user_id": "uuid-string",
+    "due_date": "2026-07-01T00:00:00.000Z",
+    "status": "overdue",
+    "books": {
+      "title": "Clean Code",
+      "author": "Robert C. Martin"
+    }
+  }
+]
+```
+
+---
+
+### 6. Get Admin Stats (Charts)
+**Endpoint:** `GET /api/admin/stats`  
+**Headers:** `Authorization: Bearer <token>` (admin only)
+
+**Success Response (200 OK):**
+```json
+{
+  "totalBooks": 240,
+  "totalMembers": 85,
+  "activeLoans": 32,
+  "overdueLoans": 4,
+  "borrowsPerMonth": [
+    { "month": "Feb", "count": 18 },
+    { "month": "Mar", "count": 24 },
+    { "month": "Apr", "count": 20 },
+    { "month": "May", "count": 30 },
+    { "month": "Jun", "count": 27 },
+    { "month": "Jul", "count": 15 }
+  ]
+}
+```
+
+**Error Response (500):**
+```json
+{ "error": "Failed to fetch admin stats" }
+```
 ```
