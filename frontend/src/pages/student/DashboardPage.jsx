@@ -45,7 +45,6 @@ export default function StudentDashboardPage() {
 
       {/* Stat cards */}
       <div className="grid-stats">
-        <StatCard tone="neutral"  icon={BookOpen}   eyebrow="Inventory" value="1,247" label="Books Available" />
         <StatCard tone="active"   icon={Bookmark}   eyebrow="Active"    value="3"     label="Books Borrowed" />
         <StatCard tone="warning"  icon={Bell}       eyebrow="Warning"   value="1"     label="Due Soon" />
         <StatCard tone="critical" icon={AlertCircle} eyebrow="Critical" value="0"     label="Overdue Books" />
