@@ -1,25 +1,42 @@
-// Student — Borrowing History. Past (returned/late) loans, with pagination.
-// MOCK data; wire to borrowService.getHistory() later.
-import { useState } from "react";
+// Student — Borrowing History. Real returned/late loans, paginated client-side.
+import { useState, useEffect } from "react";
 import Card from "../../components/ui/Card.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
 import Pagination from "../../components/tables/Pagination.jsx";
+import { getStudentDashboard } from "../../services/borrowService.js";
+import { useAuth } from "../../context/AuthContext.jsx";
 
-const HISTORY = [
-  { id: 1, title: "Mechanical Vibrations", author: "Singiresu Rao", borrowed: "Sept 01, 2023", returned: "Sept 15, 2023", status: "returned" },
-  { id: 2, title: "Macroeconomics", author: "N. Gregory Mankiw", borrowed: "Aug 08, 2023", returned: "Aug 22, 2023", status: "late" },
-  { id: 3, title: "Data Structures 101", author: "Abena Fosua", borrowed: "Jul 20, 2023", returned: "Aug 02, 2023", status: "returned" },
-  { id: 4, title: "Linear Algebra", author: "Gilbert Strang", borrowed: "Jul 01, 2023", returned: "Jul 14, 2023", status: "returned" },
-  { id: 5, title: "Thermodynamics", author: "Yunus Çengel", borrowed: "Jun 10, 2023", returned: "Jun 28, 2023", status: "late" },
-];
-
-const PER_PAGE = 4;
+const PER_PAGE = 8;
 
 export default function BorrowingHistoryPage() {
+  const { user } = useAuth();
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [page, setPage] = useState(1);
-  const totalPages = Math.ceil(HISTORY.length / PER_PAGE);
-  const rows = HISTORY.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!user?.id) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await getStudentDashboard(user.id);
+        if (!cancelled) setHistory(data.history);
+      } catch (e) {
+        if (!cancelled) setError(e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const totalPages = Math.max(1, Math.ceil(history.length / PER_PAGE));
+  const rows = history.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
   return (
     <div>
@@ -28,6 +45,8 @@ export default function BorrowingHistoryPage() {
 
       <Card title="Past Borrowings">
         <DataTable
+          loading={loading}
+          error={error}
           columns={[
             { key: "title", header: "Book Title" },
             { key: "author", header: "Author" },
