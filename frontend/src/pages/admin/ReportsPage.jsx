@@ -47,7 +47,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <div style={{ marginTop: 22 }}>
+      <div className="detail-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 22 }}>
         <Card title="Borrows Per Month">
           <DataTable
             loading={loading} error={error}
@@ -57,6 +57,19 @@ export default function ReportsPage() {
             ]}
             rows={stats.borrowsPerMonth || []}
             rowKey="month"
+            emptyMessage="No data yet."
+          />
+        </Card>
+
+        <Card title="Top Borrowed Books">
+          <DataTable
+            loading={loading} error={error}
+            columns={[
+              { key: "title", header: "Title" },
+              { key: "borrows", header: "Total Borrows" },
+            ]}
+            rows={stats.topBooks || []}
+            rowKey="title"
             emptyMessage="No data yet."
           />
         </Card>

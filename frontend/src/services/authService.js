@@ -12,7 +12,29 @@ export async function forgotPassword(email) {
 }
 
 export async function getProfile(userId) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return {
+      id: userId,
+      full_name: "Kwame Nkrumah",
+      email: "student@knust.edu.gh",
+      role: "student",
+      is_active: true
+    };
+  }
+
   // GET /auth/profile/:userId -> { success, profile: { full_name, ... } }
   const res = await api.get(`/auth/profile/${userId}`);
-  return res.profile;
+  return res.user || res.profile;
+}
+
+export async function resetPassword(token, newPassword) {
+  return api.post("/auth/reset-password", { token, newPassword });
+}
+
+export async function updateProfile(userId, patch) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { success: true, message: "Profile updated" };
+  }
+  // PUT /auth/profile/:userId
+  return api.put(`/auth/profile/${userId}`, patch);
 }

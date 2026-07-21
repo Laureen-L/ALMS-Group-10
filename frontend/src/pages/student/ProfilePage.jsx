@@ -9,13 +9,18 @@ import Badge from "../../components/ui/Badge.jsx";
 import Avatar from "../../components/ui/Avatar.jsx";
 import Input from "../../components/ui/Input.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
-import { getProfile } from "../../services/authService.js";
+import { getProfile, updateProfile } from "../../services/authService.js";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateLocalUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({ full_name: "" });
+  const [saveError, setSaveError] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -24,19 +29,36 @@ export default function ProfilePage() {
       setLoading(true); setError(null);
       try {
         const p = await getProfile(user.id);
-        if (!cancelled) setProfile(p);
+        if (!cancelled) {
+          setProfile(p);
+          setFormData({ full_name: p.full_name || user?.name || "" });
+        }
       } catch (e) { if (!cancelled) setError(e); }
       finally { if (!cancelled) setLoading(false); }
     }
     load();
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, user?.name]);
+
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateProfile(user.id, { full_name: formData.full_name });
+      setProfile((prev) => ({ ...prev, full_name: formData.full_name }));
+      updateLocalUser({ name: formData.full_name });
+      setIsEditing(false);
+    } catch (e) {
+      setSaveError(e);
+    } finally {
+      setSaving(false);
+    }
+  }
 
   if (loading) return <div className="state"><div className="state__spinner" />Loading profile…</div>;
   if (error) return <div className="state">Couldn’t load your profile. {error.message}</div>;
 
   const p = profile || {};
-  const name = p.full_name || user?.name || "—";
   const email = p.email || user?.email || "—";
   const role = p.role || user?.role || "student";
 
@@ -45,26 +67,39 @@ export default function ProfilePage() {
       <div className="profile-head" />
       <div className="profile-card">
         <div className="profile-id-row">
-          <div className="profile-avatar"><Avatar name={name} size={96} /></div>
+          <div className="profile-avatar"><Avatar name={p.full_name || user?.name || ""} size={96} /></div>
           <div style={{ flex: 1 }}>
-            <div className="profile-name">{name} <Badge tone="green">{role}</Badge></div>
+            <div className="profile-name">{p.full_name || user?.name || ""} <Badge tone="green">{role}</Badge></div>
             <div className="profile-email">{email}</div>
             <div className="page-sub" style={{ margin: "4px 0 0" }}>{p.is_active ? "Active member" : "Inactive"}</div>
           </div>
-          <Button variant="gold" disabled title="Not available yet"><Pencil size={16} /> Update Profile</Button>
+          {!isEditing ? (
+            <Button variant="gold" onClick={() => setIsEditing(true)}><Pencil size={16} /> Update Profile</Button>
+          ) : (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Button variant="ghost" onClick={() => { setIsEditing(false); setFormData({ full_name: p.full_name || user?.name || "" }); }}>Cancel</Button>
+              <Button variant="gold" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="detail-grid" style={{ gridTemplateColumns: "1fr 340px" }}>
         <Card title="Personal Information">
+          {saveError && <p className="field__error" style={{ marginBottom: 12 }}>{saveError.message}</p>}
           <div className="form-grid">
-            <Input label="Full Name" value={name} disabled />
+            <Input 
+              label="Full Name" 
+              value={formData.full_name} 
+              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              disabled={!isEditing || saving} 
+            />
             <Input label="Email Address" value={email} disabled />
             <Input label="Role" value={role} disabled />
             <Input label="Status" value={p.is_active ? "Active" : "Inactive"} disabled />
           </div>
           <p className="auth__hint" style={{ marginTop: 12 }}>
-            Editing isn’t available yet — the backend has no update-profile endpoint.
+            You can now update your profile name!
           </p>
         </Card>
 

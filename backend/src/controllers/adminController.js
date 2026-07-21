@@ -116,7 +116,7 @@ const getLibrarianDashboard = async (req, res) => {
 const getMembers = async (req, res) => {
   try {
     const { data, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*')
       .order('created_at', { ascending: false });
 
@@ -183,7 +183,7 @@ const getAdminStats = async (req, res) => {
     if (booksError) throw booksError;
 
     const { count: totalMembers, error: membersError } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*', { count: 'exact', head: true });
 
     if (membersError) throw membersError;
