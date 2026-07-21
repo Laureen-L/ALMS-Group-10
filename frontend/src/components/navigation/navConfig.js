@@ -29,7 +29,7 @@ export const NAV = {
 };
 
 export const BRAND = {
-  student:   { title: "Library Portal", sub: "Student Services" },
+  student:   { title: "Student Portal", sub: "Student Services" },
   librarian: { title: "Librarian Portal",   sub: "Library Management" },
   admin:     { title: "Admin Portal",   sub: "Library Management" },
 };

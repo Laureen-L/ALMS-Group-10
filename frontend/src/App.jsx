@@ -3,7 +3,6 @@ import { BrowserRouter } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext.jsx";
 import { ThemeProvider } from "./context/ThemeContext.jsx";
 import AppRoutes from "./routes/index.jsx";
-import DevRoleSwitcher from "./components/DevRoleSwitcher.jsx";
 
 export default function App() {
   return (
@@ -11,7 +10,6 @@ export default function App() {
       <ThemeProvider>
         <AuthProvider>
           <AppRoutes />
-          <DevRoleSwitcher />
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
