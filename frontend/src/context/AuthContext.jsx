@@ -9,7 +9,7 @@ import * as authService from "../services/authService.js";
 
 const AuthContext = createContext(null);
 const USER_KEY = "alms_user";
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
+const USE_MOCK = import.meta.env.VITE_USE_MOCK === "false";
 
 // --- Mock users for development (only used when VITE_USE_MOCK=true) ---
 const MOCK_USERS = {
