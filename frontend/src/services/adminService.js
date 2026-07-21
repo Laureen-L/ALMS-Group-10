@@ -99,9 +99,17 @@ export async function getAdminStats() {
       activeLoans: 45,
       overdueLoans: 3,
       borrowsPerMonth: [
-        { label: "Jan", value: 12 }, { label: "Feb", value: 19 }, { label: "Mar", value: 15 },
-        { label: "Apr", value: 25 }, { label: "May", value: 32 }, { label: "Jun", value: 28 },
-        { label: "Jul", value: 40 }, { label: "Aug", value: 55 }, { label: "Sep", value: 48 },
+        { month: "Jan", count: 120 }, { month: "Feb", count: 190 }, { month: "Mar", count: 155 },
+        { month: "Apr", count: 250 }, { month: "May", count: 320 }, { month: "Jun", count: 280 },
+        { month: "Jul", count: 405 }, { month: "Aug", count: 550 }, { month: "Sep", count: 480 },
+        { month: "Oct", count: 610 }, { month: "Nov", count: 580 }, { month: "Dec", count: 720 },
+      ],
+      topBooks: [
+        { title: "The Pragmatic Programmer", author: "David Thomas", borrows: 142 },
+        { title: "Clean Code", author: "Robert C. Martin", borrows: 98 },
+        { title: "Design Patterns", author: "Erich Gamma", borrows: 75 },
+        { title: "Refactoring", author: "Martin Fowler", borrows: 64 },
+        { title: "Introduction to Algorithms", author: "Thomas H. Cormen", borrows: 51 },
       ],
     };
   }
