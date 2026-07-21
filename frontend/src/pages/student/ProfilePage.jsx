@@ -1,88 +1,112 @@
-// SCREEN 6 — Student Profile.
-// Header card, stat cards, personal info form, security, preferences.
-// MOCK data seeded from the signed-in user; wire to userService.getProfile() later.
-import { useState } from "react";
-import { BookOpen, Copy, CalendarClock, AlertCircle, KeyRound, Pencil } from "lucide-react";
+// SCREEN 6 — Student Profile. Loads the REAL profile (GET /auth/profile/:id).
+// NOTE: the contract has no update-profile or change-password endpoint yet,
+// so those buttons are disabled and flagged. Wire them when the backend adds them.
+import { useState, useEffect } from "react";
+import { KeyRound, Pencil } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Button from "../../components/ui/Button.jsx";
 import Badge from "../../components/ui/Badge.jsx";
 import Avatar from "../../components/ui/Avatar.jsx";
 import Input from "../../components/ui/Input.jsx";
-import Select from "../../components/ui/Select.jsx";
-import Toggle from "../../components/ui/Toggle.jsx";
-import StatCard from "../../components/stats/StatCard.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
+import { getProfile, updateProfile } from "../../services/authService.js";
 
 export default function ProfilePage() {
-  const { user } = useAuth();
+  const { user, updateLocalUser } = useAuth();
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({ full_name: "" });
+  const [saveError, setSaveError] = useState(null);
 
-  const [form, setForm] = useState({
-    name: user?.name || "Kwame Nkrumah",
-    email: user?.email || "k.nkrumah@knust.edu.gh",
-    phone: "+233 24 567 8901",
-    studentId: "20845612",
-    department: "Computer Science",
-  });
-  const [emailNotifs, setEmailNotifs] = useState(true);
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!user?.id) return;
+      setLoading(true); setError(null);
+      try {
+        const p = await getProfile(user.id);
+        if (!cancelled) {
+          setProfile(p);
+          setFormData({ full_name: p.full_name || user?.name || "" });
+        }
+      } catch (e) { if (!cancelled) setError(e); }
+      finally { if (!cancelled) setLoading(false); }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [user?.id, user?.name]);
 
-  function onSave() {
-    // TODO: userService.updateProfile(form)
-    console.log("save", form);
+  async function handleSave() {
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await updateProfile(user.id, { full_name: formData.full_name });
+      setProfile((prev) => ({ ...prev, full_name: formData.full_name }));
+      updateLocalUser({ name: formData.full_name });
+      setIsEditing(false);
+    } catch (e) {
+      setSaveError(e);
+    } finally {
+      setSaving(false);
+    }
   }
+
+  if (loading) return <div className="state"><div className="state__spinner" />Loading profile…</div>;
+  if (error) return <div className="state">Couldn’t load your profile. {error.message}</div>;
+
+  const p = profile || {};
+  const email = p.email || user?.email || "—";
+  const role = p.role || user?.role || "student";
 
   return (
     <div>
-      {/* Header */}
       <div className="profile-head" />
       <div className="profile-card">
         <div className="profile-id-row">
-          <div className="profile-avatar"><Avatar name={form.name} size={96} /></div>
+          <div className="profile-avatar"><Avatar name={p.full_name || user?.name || ""} size={96} /></div>
           <div style={{ flex: 1 }}>
-            <div className="profile-name">{form.name} <Badge tone="green">Student</Badge></div>
-            <div className="profile-email">{form.email}</div>
-            <div className="page-sub" style={{ margin: "4px 0 0" }}>Member since Jan 2023</div>
+            <div className="profile-name">{p.full_name || user?.name || ""} <Badge tone="green">{role}</Badge></div>
+            <div className="profile-email">{email}</div>
+            <div className="page-sub" style={{ margin: "4px 0 0" }}>{p.is_active ? "Active member" : "Inactive"}</div>
           </div>
-          <Button variant="gold" onClick={onSave}><Pencil size={16} /> Update Profile</Button>
+          {!isEditing ? (
+            <Button variant="gold" onClick={() => setIsEditing(true)}><Pencil size={16} /> Update Profile</Button>
+          ) : (
+            <div style={{ display: "flex", gap: "8px" }}>
+              <Button variant="ghost" onClick={() => { setIsEditing(false); setFormData({ full_name: p.full_name || user?.name || "" }); }}>Cancel</Button>
+              <Button variant="gold" onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save Changes"}</Button>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid-stats" style={{ marginBottom: 22 }}>
-        <StatCard tone="active"   icon={BookOpen}      eyebrow="Active"   value="2"  label="Current Borrows" />
-        <StatCard tone="neutral"  icon={Copy}          eyebrow="Total"    value="14" label="Total Borrows" />
-        <StatCard tone="warning"  icon={CalendarClock} eyebrow="Due Soon" value="1"  label="Within 48 hours" />
-        <StatCard tone="critical" icon={AlertCircle}   eyebrow="Overdue"  value="0"  label="No penalties" />
-      </div>
-
-      {/* Info + side column */}
       <div className="detail-grid" style={{ gridTemplateColumns: "1fr 340px" }}>
         <Card title="Personal Information">
+          {saveError && <p className="field__error" style={{ marginBottom: 12 }}>{saveError.message}</p>}
           <div className="form-grid">
-            <Input label="Full Name" value={form.name} onChange={set("name")} />
-            <Input label="Email Address" type="email" value={form.email} onChange={set("email")} />
-            <Input label="Phone Number" value={form.phone} onChange={set("phone")} />
-            <Input label="Student ID" value={form.studentId} disabled />
-            <Select label="Department" value={form.department} onChange={set("department")}
-              options={["Computer Science", "Civil Engineering", "Mechanical Engineering", "Business"]} />
-            <Input label="User Role" value="Student" disabled />
+            <Input 
+              label="Full Name" 
+              value={formData.full_name} 
+              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              disabled={!isEditing || saving} 
+            />
+            <Input label="Email Address" value={email} disabled />
+            <Input label="Role" value={role} disabled />
+            <Input label="Status" value={p.is_active ? "Active" : "Inactive"} disabled />
           </div>
-          <div style={{ marginTop: 18 }}>
-            <Button variant="gold" onClick={onSave}>Save Changes</Button>
-          </div>
+          <p className="auth__hint" style={{ marginTop: 12 }}>
+            You can now update your profile name!
+          </p>
         </Card>
 
         <div className="stack" style={{ gap: 22 }}>
           <Card title="Security">
-            <p className="page-sub" style={{ marginBottom: 14 }}>Last changed 3 months ago. We recommend changing it every 6 months.</p>
-            <Button variant="gold" block><KeyRound size={16} /> Change Password</Button>
-          </Card>
-
-          <Card title="Preferences">
-            <div className="row row--between">
-              <span>Email Notifications</span>
-              <Toggle checked={emailNotifs} onChange={setEmailNotifs} />
-            </div>
+            <p className="page-sub" style={{ marginBottom: 14 }}>Password changes aren’t available yet.</p>
+            <Button variant="gold" block disabled title="Not available yet"><KeyRound size={16} /> Change Password</Button>
           </Card>
         </div>
       </div>

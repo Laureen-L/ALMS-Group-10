@@ -1,4 +1,61 @@
-// Services — borrow, return, history, overdue.
-// ── Write this module's code below. ──
+// Borrow / Return API + the student's loan lists.
+// - borrow/return: Dev C contract (POST /borrow, POST /return)
+// - loan lists come from the student dashboard endpoint (Dev D):
+//   GET /admin/student/dashboard/:userId -> { activeLoans, overdueLoans, borrowHistory, summary }
+import { api } from "./apiClient.js";
+import { formatDate } from "../utils/formatDate.js";
 
-export {};
+// Map a backend loan (with nested `books`) to the flat shape our tables use.
+function mapLoan(l) {
+  if (!l) return null;
+  return {
+    id: l.id,
+    bookId: l.book_id,
+    title: l.books?.title || "—",
+    author: l.books?.author || "—",
+    borrowed: formatDate(l.borrow_date),
+    due: formatDate(l.due_date),
+    returned: formatDate(l.return_date),
+    status: l.status, // "active" | "overdue" | "returned"
+  };
+}
+
+// POST /borrow { bookId } -> { message, borrow }
+export async function borrow(bookId) {
+  const res = await api.post("/borrow", { bookId });
+  return mapLoan(res.borrow);
+}
+
+// POST /return { borrowId } -> { message, borrow }
+export async function returnBook(borrowId) {
+  const res = await api.post("/return", { borrowId });
+  return res.borrow;
+}
+
+// GET /admin/student/dashboard/:userId -> mapped loan lists + summary
+export async function getStudentDashboard(userId) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return {
+      active: [
+        { id: 101, bookId: 1, title: "The Pragmatic Programmer", author: "David Thomas", borrowed: "Oct 12, 2023", due: "Nov 12, 2023", status: "active" },
+        { id: 102, bookId: 2, title: "Clean Code", author: "Robert C. Martin", borrowed: "Oct 15, 2023", due: "Nov 15, 2023", status: "active" }
+      ],
+      overdue: [
+        { id: 103, bookId: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", status: "overdue" }
+      ],
+      history: [
+        { id: 104, bookId: 4, title: "Design Patterns", author: "Erich Gamma", borrowed: "Jan 10, 2023", returned: "Jan 25, 2023", status: "returned" },
+        { id: 105, bookId: 5, title: "Refactoring", author: "Martin Fowler", borrowed: "Mar 05, 2023", returned: "Mar 20, 2023", status: "returned" }
+      ],
+      summary: { totalActive: 2, totalOverdue: 1, totalBorrowed: 5 }
+    };
+  }
+
+  const data = await api.get(`/admin/student/dashboard/${userId}`);
+  return {
+    active: (data.activeLoans || []).map(mapLoan),
+    overdue: (data.overdueLoans || []).map(mapLoan),
+    history: (data.borrowHistory || []).map(mapLoan),
+    summary: data.summary || { totalActive: 0, totalOverdue: 0, totalBorrowed: 0 },
+  };
+}

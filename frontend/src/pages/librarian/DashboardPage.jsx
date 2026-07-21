@@ -1,112 +1,89 @@
-// SCREEN 5 — Librarian Dashboard.
-// Stat cards, overdue alert banner, tabs (Catalog / Activity / Overdue),
-// book catalog table with Edit/Remove (Remove opens a confirm modal).
-// MOCK data; wire to bookService / borrowService later.
-import { useState } from "react";
-import { BookOpen, Users, ClipboardCheck, AlertTriangle, Plus, Pencil, Trash2, Send } from "lucide-react";
+// SCREEN 5 — Librarian Dashboard. Real stats + tabs (catalog / activity / overdue).
+import { useState, useEffect } from "react";
+import { BookOpen, ClipboardCheck, AlertTriangle, Plus, Pencil, Trash2, Send } from "lucide-react";
 import StatCard from "../../components/stats/StatCard.jsx";
 import AlertBanner from "../../components/ui/AlertBanner.jsx";
 import Button from "../../components/ui/Button.jsx";
 import Input from "../../components/ui/Input.jsx";
-import Select from "../../components/ui/Select.jsx";
 import Card from "../../components/ui/Card.jsx";
 import Tabs from "../../components/ui/Tabs.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
-
-const BOOKS = [
-  { id: "BK-4521", title: "Advanced Algorithms", author: "Dr. Kofi Adu", isbn: "978-0131103627", genre: "CS", qty: 15, status: "available" },
-  { id: "BK-3910", title: "Modern Civil Structures", author: "Elena Mensah", isbn: "978-3161484100", genre: "Engineering", qty: 2, status: "low_stock" },
-  { id: "BK-1102", title: "Microeconomics 101", author: "Samuel Osei", isbn: "978-0061120084", genre: "Business", qty: 0, status: "out_of_stock" },
-];
-
-const ACTIVITY = [
-  { id: 1, member: "Ama Serwaa", title: "Modern Algorithms in Java", action: "Borrow", date: "Oct 12, 2023", status: "active" },
-  { id: 2, member: "Kwame Mensah", title: "Intro to Quantum Computing", action: "Borrow", date: "Sep 20, 2023", status: "overdue" },
-  { id: 3, member: "Abena Fosua", title: "Data Structures 101", action: "Return", date: "Sep 01, 2023", status: "returned" },
-];
-
-const OVERDUE = [
-  { id: 1, member: "Kwame Mensah", title: "Intro to Quantum Computing", due: "Oct 20, 2023", daysLate: 8 },
-  { id: 2, member: "Yaw Boateng", title: "Organic Chemistry Vol II", due: "Oct 18, 2023", daysLate: 10 },
-];
+import { useNavigate } from "react-router-dom";
+import { getLibrarianDashboard } from "../../services/adminService.js";
+import { getBooks, deleteBook } from "../../services/bookService.js";
 
 export default function LibrarianDashboardPage() {
+  const navigate = useNavigate();
   const [tab, setTab] = useState("catalog");
+  const [dash, setDash] = useState({ stats: {}, recentActivity: [], overdueList: [] });
+  const [books, setBooks] = useState([]);
   const [query, setQuery] = useState("");
-  const [genre, setGenre] = useState("");
-  const [status, setStatus] = useState("");
-  const [removing, setRemoving] = useState(null); // book pending removal
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [removing, setRemoving] = useState(null);
 
-  function confirmRemove() {
-    // TODO: bookService.remove(removing.id)
-    console.log("removed", removing.id);
-    setRemoving(null);
+  async function load() {
+    setLoading(true); setError(null);
+    try {
+      const [d, b] = await Promise.all([getLibrarianDashboard(), getBooks({ search: query })]);
+      setDash(d); setBooks(b);
+    } catch (e) { setError(e); }
+    finally { setLoading(false); }
   }
+  useEffect(() => { load(); }, []);
+
+  async function confirmRemove() {
+    try { await deleteBook(removing.id); setRemoving(null); load(); }
+    catch (e) { setError(e); setRemoving(null); }
+  }
+
+  const stats = dash.stats || {};
 
   return (
     <div>
       <h1 className="page-title">Dashboard</h1>
       <p className="page-sub">Manage the catalog, loans, and overdue books.</p>
 
-      {/* Stat cards */}
       <div className="grid-stats">
-        <StatCard tone="neutral"  icon={BookOpen}        eyebrow="+12 new"  value="1,247" label="Total Books" />
-        <StatCard tone="active"   icon={Users}           eyebrow="+4 today" value="856"   label="Total Members" />
-        <StatCard tone="active"   icon={ClipboardCheck}  eyebrow="Active"   value="142"   label="Active Loans" />
-        <StatCard tone="critical" icon={AlertTriangle}   eyebrow="Action"   value="23"    label="Overdue Loans" />
+        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog"  value={String(stats.totalBooks ?? 0)}   label="Total Books" />
+        <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active"  value={String(stats.activeLoans ?? 0)}  label="Active Loans" />
+        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"   value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" />
+        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Live"     value={String(books.length)} label="Books Listed" />
       </div>
 
-      {/* Overdue banner */}
-      <div style={{ margin: "22px 0" }}>
-        <AlertBanner
-          tone="danger"
-          message="You have 23 overdue loans that require immediate action."
-          action={<Button variant="outline" style={{ background: "#fff" }}>Send All Reminders</Button>}
-        />
-      </div>
+      {(stats.overdueLoans ?? 0) > 0 && (
+        <div style={{ margin: "22px 0" }}>
+          <AlertBanner tone="danger" message={`You have ${stats.overdueLoans} overdue loans that require action.`}
+            action={<Button variant="outline" style={{ background: "#fff" }} onClick={() => setTab("overdue")}>View Overdue</Button>} />
+        </div>
+      )}
 
-      {/* Tabs */}
       <Card>
-        <Tabs
-          active={tab}
-          onChange={setTab}
-          tabs={[
-            { id: "catalog", label: "Book Catalog" },
-            { id: "activity", label: "Borrowing Activity" },
-            { id: "overdue", label: "Overdue Management" },
-          ]}
-        />
+        <Tabs active={tab} onChange={setTab} tabs={[
+          { id: "catalog", label: "Book Catalog" },
+          { id: "activity", label: "Borrowing Activity" },
+          { id: "overdue", label: "Overdue Management" },
+        ]} />
 
         <div style={{ marginTop: 18 }}>
           {tab === "catalog" && (
             <>
               <div className="toolbar">
                 <div className="toolbar__search">
-                  <Input placeholder="Search by title, author, or ISBN…" value={query} onChange={(e) => setQuery(e.target.value)} />
+                  <Input placeholder="Search by title…" value={query} onChange={(e) => setQuery(e.target.value)} />
                 </div>
-                <div className="toolbar__filter">
-                  <Select value={genre} onChange={(e) => setGenre(e.target.value)}
-                    options={[{ value: "", label: "All Genres" }, "CS", "Engineering", "Business", "Science"]} />
-                </div>
-                <div className="toolbar__filter">
-                  <Select value={status} onChange={(e) => setStatus(e.target.value)}
-                    options={[{ value: "", label: "All Statuses" }, { value: "available", label: "Available" }, { value: "low_stock", label: "Low Stock" }, { value: "out_of_stock", label: "Out of Stock" }]} />
-                </div>
-                <Button variant="green"><Plus size={16} /> Add New Book</Button>
+                <Button variant="ghost" onClick={load}>Search</Button>
+                <Button variant="green" onClick={() => navigate("/librarian/books/new")}><Plus size={16} /> Add New Book</Button>
               </div>
-
               <DataTable
-                rowKey="id"
+                loading={loading} error={error}
                 columns={[
-                  { key: "id", header: "ID" },
                   { key: "title", header: "Title" },
                   { key: "author", header: "Author" },
-                  { key: "isbn", header: "ISBN" },
                   { key: "genre", header: "Genre" },
-                  { key: "qty", header: "Qty" },
-                  { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+                  { key: "publishedYear", header: "Year" },
                   { key: "actions", header: "Actions", render: (r) => (
                     <span className="actions-cell">
                       <button className="act-edit"><Pencil size={14} /> Edit</button>
@@ -114,57 +91,48 @@ export default function LibrarianDashboardPage() {
                     </span>
                   ) },
                 ]}
-                rows={BOOKS}
-                emptyMessage="No books match your filters."
+                rows={books}
+                emptyMessage="No books in the catalog yet."
               />
             </>
           )}
 
           {tab === "activity" && (
             <DataTable
+              loading={loading} error={error}
               columns={[
                 { key: "member", header: "Member" },
                 { key: "title", header: "Book Title" },
-                { key: "action", header: "Action" },
-                { key: "date", header: "Date" },
+                { key: "borrowed", header: "Borrow Date" },
+                { key: "due", header: "Due Date" },
                 { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
               ]}
-              rows={ACTIVITY}
-              emptyMessage="No borrowing activity yet."
+              rows={dash.recentActivity}
+              emptyMessage="No recent activity."
             />
           )}
 
           {tab === "overdue" && (
             <DataTable
+              loading={loading} error={error}
               columns={[
                 { key: "member", header: "Member" },
                 { key: "title", header: "Book Title" },
                 { key: "due", header: "Due Date" },
-                { key: "daysLate", header: "Days Late", render: () => <StatusBadge status="overdue" /> },
-                { key: "actions", header: "Action", render: () => (
-                  <button className="act-edit"><Send size={14} /> Send reminder</button>
-                ) },
+                { key: "status", header: "Status", render: () => <StatusBadge status="overdue" /> },
+                { key: "actions", header: "Action", render: () => <button className="act-edit"><Send size={14} /> Remind</button> },
               ]}
-              rows={OVERDUE}
-              emptyMessage="Nothing overdue — nice."
+              rows={dash.overdueList}
+              emptyMessage="Nothing overdue."
             />
           )}
         </div>
       </Card>
 
-      {/* Remove confirmation */}
       {removing && (
-        <Modal
-          title="Remove this book?"
-          onClose={() => setRemoving(null)}
-          footer={
-            <>
-              <Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button>
-              <Button variant="danger" onClick={confirmRemove}>Remove book</Button>
-            </>
-          }
-        >
-          <p>You’re about to remove <strong>{removing.title}</strong> ({removing.id}) from the catalog. This can’t be undone.</p>
+        <Modal title="Remove this book?" onClose={() => setRemoving(null)}
+          footer={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button variant="danger" onClick={confirmRemove}>Remove book</Button></>}>
+          <p>Remove <strong>{removing.title}</strong> from the catalog? This can’t be undone.</p>
         </Modal>
       )}
     </div>

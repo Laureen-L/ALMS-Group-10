@@ -1,11 +1,6 @@
-// Base API client. Every service file imports `request` from here.
+// Base API client. Every service imports `api` / `request` from here.
 // Reads the backend URL from .env (VITE_API_BASE_URL) and attaches the JWT.
-//
-// NOTE: backend is owned by another team. Swap nothing here when they ship —
-// just point VITE_API_BASE_URL at their server. The token key below must match
-// what AuthContext stores.
-
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api";
 export const TOKEN_KEY = "alms_token";
 
 export function getToken() {
@@ -24,17 +19,14 @@ export async function request(path, { method = "GET", body, headers = {} } = {})
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
 
-  if (!res.ok) {
-    let message = `Request failed (${res.status})`;
-    try {
-      const data = await res.json();
-      message = data.message || message;
-    } catch { /* non-JSON error body */ }
-    throw new Error(message);
-  }
+  let data = null;
+  try { data = await res.json(); } catch { /* no/invalid JSON body */ }
 
-  if (res.status === 204) return null;
-  return res.json();
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `Request failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
 }
 
 export const api = {

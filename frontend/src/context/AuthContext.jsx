@@ -1,17 +1,17 @@
-// Auth state for the whole app: current user, role, login/logout.
-//
-// Ships with a MOCK login so the team can build every screen before the
-// backend exists. When the backend is ready, replace the body of `login`
-// with a real call to authService.login() — nothing else changes.
-
+// Auth state: current user, role, login/logout.
+// Toggle between MOCK login and the REAL backend with one line in .env:
+//   VITE_USE_MOCK=true   -> mock logins (student@/librarian@/admin@), no backend needed
+//   VITE_USE_MOCK=false  -> real POST /auth/login against http://localhost:5000/api
 import { createContext, useContext, useEffect, useState } from "react";
 import { TOKEN_KEY } from "../services/apiClient.js";
 import { ROLES } from "../constants/roles.js";
+import * as authService from "../services/authService.js";
 
 const AuthContext = createContext(null);
 const USER_KEY = "alms_user";
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
 
-// --- Mock users for development. Delete once real auth is wired. ---
+// --- Mock users for development (only used when VITE_USE_MOCK=true) ---
 const MOCK_USERS = {
   "student@knust.edu.gh":   { id: 1, name: "Kwame Nkrumah",  role: ROLES.STUDENT,   email: "student@knust.edu.gh" },
   "librarian@knust.edu.gh": { id: 2, name: "Ama Serwaa",     role: ROLES.LIBRARIAN, email: "librarian@knust.edu.gh" },
@@ -22,7 +22,6 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Restore session on first load.
   useEffect(() => {
     const stored = localStorage.getItem(USER_KEY);
     if (stored) setUser(JSON.parse(stored));
@@ -30,21 +29,25 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function login(email, password) {
-    // TODO(backend): replace with authService.login(email, password)
-
-    // Normalize so casing / whitespace can't cause a wrong match.
-    const key = (email || "").trim().toLowerCase();
-    const found = MOCK_USERS[key];
-
-    // No silent fallback: an unknown email is a real error you can see.
-    if (!found) {
-      throw new Error(
-        "No account for that email. Use student@, librarian@ or admin@knust.edu.gh"
-      );
+    if (USE_MOCK) {
+      const key = (email || "").trim().toLowerCase();
+      const found = MOCK_USERS[key];
+      if (!found) throw new Error("No account for that email. Use student@, librarian@ or admin@knust.edu.gh");
+      localStorage.setItem(TOKEN_KEY, "mock-jwt-token");
+      localStorage.setItem(USER_KEY, JSON.stringify(found));
+      setUser(found);
+      return found;
     }
 
-    const token = "mock-jwt-token";
-    localStorage.setItem(TOKEN_KEY, token);
+   // --- REAL backend ---
+    const res = await authService.login(email, password);   // { token, user }
+    localStorage.setItem(TOKEN_KEY, res.token);
+    const found = {
+      id: res.user.id,
+      email: res.user.email,
+      role: res.user.role,
+      name: res.user.full_name || res.user.email,   // name is already in the login response
+    };
     localStorage.setItem(USER_KEY, JSON.stringify(found));
     setUser(found);
     return found;
@@ -56,7 +59,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
-  const value = { user, loading, isAuthenticated: !!user, login, logout };
+  function updateLocalUser(data) {
+    const updated = { ...user, ...data };
+    localStorage.setItem(USER_KEY, JSON.stringify(updated));
+    setUser(updated);
+  }
+
+  const value = { user, loading, isAuthenticated: !!user, login, logout, updateLocalUser };
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
