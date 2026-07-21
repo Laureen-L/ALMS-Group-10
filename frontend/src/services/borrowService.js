@@ -34,6 +34,23 @@ export async function returnBook(borrowId) {
 
 // GET /admin/student/dashboard/:userId -> mapped loan lists + summary
 export async function getStudentDashboard(userId) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return {
+      active: [
+        { id: 101, bookId: 1, title: "The Pragmatic Programmer", author: "David Thomas", borrowed: "Oct 12, 2023", due: "Nov 12, 2023", status: "active" },
+        { id: 102, bookId: 2, title: "Clean Code", author: "Robert C. Martin", borrowed: "Oct 15, 2023", due: "Nov 15, 2023", status: "active" }
+      ],
+      overdue: [
+        { id: 103, bookId: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", status: "overdue" }
+      ],
+      history: [
+        { id: 104, bookId: 4, title: "Design Patterns", author: "Erich Gamma", borrowed: "Jan 10, 2023", returned: "Jan 25, 2023", status: "returned" },
+        { id: 105, bookId: 5, title: "Refactoring", author: "Martin Fowler", borrowed: "Mar 05, 2023", returned: "Mar 20, 2023", status: "returned" }
+      ],
+      summary: { totalActive: 2, totalOverdue: 1, totalBorrowed: 5 }
+    };
+  }
+
   const data = await api.get(`/admin/student/dashboard/${userId}`);
   return {
     active: (data.activeLoans || []).map(mapLoan),

@@ -19,8 +19,28 @@ function mapBook(b) {
   };
 }
 
+const MOCK_BOOKS = [
+  { id: 1, title: "The Pragmatic Programmer", author: "David Thomas", genre: "Computer Science", publishedYear: 1999, isbn: "978-0135957059", available: true, qty: 5 },
+  { id: 2, title: "Clean Code", author: "Robert C. Martin", genre: "Software Engineering", publishedYear: 2008, isbn: "978-0132350884", available: true, qty: 3 },
+  { id: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", genre: "Computer Science", publishedYear: 2009, isbn: "978-0262033848", available: false, qty: 0 },
+  { id: 4, title: "Design Patterns", author: "Erich Gamma", genre: "Software Engineering", publishedYear: 1994, isbn: "978-0201633610", available: true, qty: 2 },
+  { id: 5, title: "Refactoring", author: "Martin Fowler", genre: "Software Engineering", publishedYear: 1999, isbn: "978-0201485677", available: true, qty: 4 }
+];
+
 // GET /books?search=&genre=
 export async function getBooks({ search = "", genre = "" } = {}) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    let results = [...MOCK_BOOKS];
+    if (search) {
+      const q = search.toLowerCase();
+      results = results.filter(b => b.title.toLowerCase().includes(q) || b.author.toLowerCase().includes(q));
+    }
+    if (genre && genre !== "All") {
+      results = results.filter(b => b.genre === genre);
+    }
+    return results;
+  }
+
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   if (genre) params.set("genre", genre);
@@ -31,6 +51,11 @@ export async function getBooks({ search = "", genre = "" } = {}) {
 
 // GET /books/:id
 export async function getBook(id) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const book = MOCK_BOOKS.find((b) => b.id === Number(id));
+    if (!book) throw new Error("Book not found in mock data.");
+    return book;
+  }
   return mapBook(await api.get(`/books/${id}`));
 }
 
