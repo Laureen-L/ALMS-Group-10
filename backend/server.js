@@ -24,6 +24,7 @@ app.get('/', (req, res) => {
     message:"ALMS Backend API Boilerplate is up and running!",
     timestamp: new Date().toISOString()
   });
+  console.log("✅ Health Check Successful: ALMS Backend API is operational.");
 });
 
 app.use( (err,req,res,next) =>{

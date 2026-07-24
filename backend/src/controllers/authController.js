@@ -1,46 +1,50 @@
 const supabase = require('../config/supabaseClient');
 
 
-
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
 
-  if (!email) {
-    return res.status(400).json({ error: 'Email is required.' });
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'A valid email is required.' });
   }
 
-  try { 
-
+  try {
     const { data, error } = await supabase.auth.resetPasswordForEmail(email);
-    // const {data,error} = {data: null, error: null}; // Placeholder for demonstration;
 
-    // 2. Safely check for a Supabase API error
     if (error) {
-      return res.status(error.status && error.status >= 400 && error.status < 600 ? error.status : 400)
-        .json({ error: error || 'Supabase authentication error.' });
+      console.error('Supabase reset password error:', {
+        name: error.name,
+        message: error.message,
+        status: error.status,
+      });
+
+      if (error.name === 'AuthRetryableFetchError') {
+        return res.status(503).json({
+          error: 'Unable to reach authentication service. Please try again shortly.',
+        });
+      }
+
+      const status = error.status && error.status >= 400 && error.status < 600 ? error.status : 400;
+      return res.status(status).json({ error: error.message || 'Authentication error.' });
     }
 
-    return res.status(200).json({ 
-      message: 'If the email exists, a password reset link has been sent.',
-      data: data || {} 
+    return res.status(200).json({
+      message: 'If an account with that email exists, a password reset link has been sent.',
     });
-    
-  } catch (err) {
-    // 3. This will print the REAL error to your terminal running the server
-    console.error("❌ Forgot Password Error Details:", err);
 
-    // 4. Send back the actual message string instead of the raw object
-    return res.status(500).json({ 
+  } catch (err) {
+    console.error('❌ Forgot Password Error Details:', err);
+    return res.status(500).json({
       error: 'Internal server error.',
-      details: err.message || 'Unknown error occurred'
+      details: err.message || 'Unknown error occurred',
     });
   }
 };
 
-
 // 2. POST /api/auth/login
 const login = async (req, res) => {
   const { email, password } = req.body;
+  console.log(req.body)
 
   if (!email || !password) {
     return res.status(400).json({ success: false, message: "Email and password are required." });
