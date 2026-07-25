@@ -1,8 +1,5 @@
 const supabase = require('../config/supabaseClient');
 
-// Add this temporarily where you create the client
-console.log('URL:', process.env.SUPABASE_URL);
-console.log('KEY exists:', !!process.env.SUPABASE_ANON_KEY);
 
 const forgotPassword = async (req, res) => {
   const { email } = req.body;
