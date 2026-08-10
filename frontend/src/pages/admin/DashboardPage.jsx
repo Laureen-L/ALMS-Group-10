@@ -1,5 +1,6 @@
 // SCREEN 4 — Admin Dashboard. Real stats + monthly chart + members + records.
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { BookOpen, Users, ClipboardCheck, AlertTriangle } from "lucide-react";
 import StatCard from "../../components/stats/StatCard.jsx";
 import Card from "../../components/ui/Card.jsx";
@@ -12,6 +13,7 @@ import { getAdminStats, getMembers, getBorrowRecords } from "../../services/admi
 const roleTone = { student: "green", librarian: "gold", admin: "amber" };
 
 export default function AdminDashboardPage() {
+  const navigate = useNavigate();
   const [stats, setStats] = useState({});
   const [members, setMembers] = useState([]);
   const [records, setRecords] = useState([]);
@@ -41,7 +43,7 @@ export default function AdminDashboardPage() {
         <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog" value={String(stats.totalBooks ?? 0)}   label="Total Books" />
         <StatCard tone="active"   icon={Users}         eyebrow="People"  value={String(stats.totalMembers ?? 0)} label="Total Members" />
         <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active" value={String(stats.activeLoans ?? 0)}  label="Active Loans" />
-        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"  value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" />
+        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"  value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/admin/overdue-loans")} />
       </div>
 
       <div style={{ marginTop: 22 }}>

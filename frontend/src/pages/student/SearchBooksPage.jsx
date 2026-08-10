@@ -1,51 +1,142 @@
-// Student — Search Books. Now fetches from the real backend (GET /books).
+// Student — Browse Books. Two-step: pick a genre, then search inside it.
+// Landing on the page with ?search= (from the topbar) skips straight to
+// results across every genre.
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { BookOpen, Search } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowLeft, Search } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
-import Button from "../../components/ui/Button.jsx";
 import Input from "../../components/ui/Input.jsx";
-import Select from "../../components/ui/Select.jsx";
 import Badge from "../../components/ui/Badge.jsx";
-import { getBooks } from "../../services/bookService.js";
+import { getBooks, getGenres } from "../../services/bookService.js";
+import { useDebounce } from "../../hooks/useDebounce.js";
+
+// Soft tint per genre so the browse grid reads as a set of shelves.
+// Unlisted genres fall back to the neutral cream tile.
+const GENRE_TINT = {
+  "Fiction": "var(--gold-100)",
+  "Computer Science": "var(--green-100)",
+  "Software Engineering": "var(--green-100)",
+  "History": "var(--amber-100)",
+  "Mathematics": "var(--green-100)",
+  "Biology": "var(--green-100)",
+  "Chemistry": "var(--amber-100)",
+  "Physics": "var(--gold-100)",
+  "Economics": "var(--gold-100)",
+  "Self-Help": "var(--green-100)",
+};
 
 export default function SearchBooksPage() {
-  const [query, setQuery] = useState("");
-  const [genre, setGenre] = useState("");
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+
+  const [genres, setGenres] = useState([]);
+  const [genresLoading, setGenresLoading] = useState(true);
+  const [selectedGenre, setSelectedGenre] = useState(null);
+  const [search, setSearch] = useState(params.get("search") || "");
   const [books, setBooks] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    try {
-      setBooks(await getBooks({ search: query, genre }));
-    } catch (e) {
-      setError(e);
-    } finally {
-      setLoading(false);
-    }
+  const debouncedSearch = useDebounce(search, 300);
+
+  // A ?search= in the URL means "search everything", so skip the genre grid.
+  const searchingAll = !selectedGenre && !!params.get("search");
+  const showResults = !!selectedGenre || searchingAll;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setGenresLoading(true);
+      try {
+        const g = await getGenres();
+        if (!cancelled) setGenres(g);
+      } catch (e) {
+        if (!cancelled) setError(e);
+      } finally {
+        if (!cancelled) setGenresLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!showResults) return;
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const results = await getBooks({ search: debouncedSearch, genre: selectedGenre || "" });
+        if (!cancelled) setBooks(results);
+      } catch (e) {
+        if (!cancelled) setError(e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedGenre, debouncedSearch, showResults]);
+
+  function backToGenres() {
+    setSelectedGenre(null);
+    setSearch("");
+    setBooks([]);
+    setParams({}, { replace: true });
   }
 
-  useEffect(() => { load(); }, []); // initial load
+  // --- Step 1: the genre grid ---
+  if (!showResults) {
+    return (
+      <div>
+        <h1 className="page-title">Browse by Genre</h1>
+        <p className="page-sub">Pick a shelf to see what's on it.</p>
 
+        {genresLoading && <div className="state"><div className="state__spinner" />Loading genres…</div>}
+        {error && !genresLoading && <div className="state">Couldn’t load genres. {error.message}</div>}
+
+        {!genresLoading && !error && (
+          genres.length === 0 ? (
+            <div className="state">No genres in the catalog yet.</div>
+          ) : (
+            <div className="genre-grid">
+              {genres.map(({ genre, count }) => (
+                <button
+                  key={genre}
+                  type="button"
+                  className="genre-card"
+                  style={{ background: GENRE_TINT[genre] || "var(--cream-dark)" }}
+                  onClick={() => setSelectedGenre(genre)}
+                >
+                  <h2 className="genre-card__name">{genre}</h2>
+                  <p className="genre-card__count">{count} {count === 1 ? "book" : "books"}</p>
+                </button>
+              ))}
+            </div>
+          )
+        )}
+      </div>
+    );
+  }
+
+  // --- Step 2: books within the genre (or across all, when searching) ---
   return (
     <div>
-      <h1 className="page-title">Search Books</h1>
-      <p className="page-sub">Find and borrow from the library catalog.</p>
+      <button className="link-btn" onClick={backToGenres} style={{ marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>
+        <ArrowLeft size={16} /> Back to Genres
+      </button>
+
+      <h1 className="page-title">{selectedGenre || "Search Results"}</h1>
+      <p className="page-sub">
+        {selectedGenre ? `Books shelved under ${selectedGenre}.` : "Matches across every genre."}
+      </p>
 
       <Card>
-        <div className="row" style={{ gap: 14, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div style={{ flex: "2 1 220px" }}>
-            <Input label="Search library" placeholder="Search by title…" value={query} onChange={(e) => setQuery(e.target.value)} />
-          </div>
-          <div style={{ flex: "1 1 140px" }}>
-            <Select label="Genre" value={genre} onChange={(e) => setGenre(e.target.value)}
-              options={[{ value: "", label: "All Genres" }, "Technology", "Science", "Business", "Engineering"]} />
-          </div>
-          <Button variant="gold" onClick={load}><Search size={16} /> Search</Button>
-        </div>
+        <Input
+          label="Search this shelf"
+          placeholder="Search by title or author…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
       </Card>
 
       {loading && <div className="state"><div className="state__spinner" />Loading books…</div>}
@@ -53,21 +144,38 @@ export default function SearchBooksPage() {
 
       {!loading && !error && (
         <>
-          <p className="page-sub" style={{ margin: "22px 0 14px" }}>{books.length} results</p>
+          <p className="page-sub" style={{ margin: "22px 0 14px" }}>
+            {books.length} {books.length === 1 ? "result" : "results"}
+          </p>
+
           {books.length === 0 ? (
-            <div className="state">No books found.</div>
+            <div className="state">
+              <Search size={18} style={{ verticalAlign: "middle", marginRight: 6 }} />
+              No books found in {selectedGenre || "the catalog"} matching your search.
+            </div>
           ) : (
             <div className="book-grid">
               {books.map((b) => (
-                <div key={b.id} className="book-card">
-                  <div className="book-card__cover"><BookOpen size={22} /></div>
+                <div
+                  key={b.id}
+                  className="book-card"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: "pointer" }}
+                  onClick={() => navigate(`/student/catalog/${b.id}`)}
+                  onKeyDown={(e) => { if (e.key === "Enter") navigate(`/student/catalog/${b.id}`); }}
+                >
+                  <div className="book-card__cover"><Search size={22} /></div>
                   <div style={{ display: "flex", flexDirection: "column" }}>
                     <Badge tone="green">{b.genre || "Book"}</Badge>
-                    <Link to={`/student/catalog/${b.id}`} className="book-card__title" style={{ marginTop: 8 }}>{b.title}</Link>
+                    <span className="book-card__title" style={{ marginTop: 8 }}>{b.title}</span>
                     <div className="book-card__author">By {b.author}</div>
-                    {b.publishedYear && <div className="book-card__isbn">Published {b.publishedYear}</div>}
-                    <div style={{ marginTop: "auto" }}>
-                      <Link to={`/student/catalog/${b.id}`}><Button variant="gold" size="sm">View</Button></Link>
+                    <div style={{ marginTop: "auto", fontSize: 13, fontWeight: 600 }}>
+                      {b.availableQuantity > 0 ? (
+                        <span style={{ color: "var(--green-700)" }}>{b.availableQuantity} available</span>
+                      ) : (
+                        <span style={{ color: "var(--red-600)" }}>Not available</span>
+                      )}
                     </div>
                   </div>
                 </div>

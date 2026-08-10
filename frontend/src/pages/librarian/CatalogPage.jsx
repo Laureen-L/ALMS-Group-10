@@ -1,6 +1,6 @@
-// Admin — Catalog. Real books (GET /books) with remove (DELETE /books/:id).
+// Librarian — Catalog. Real books (GET /books) with remove (DELETE /books/:id).
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Input from "../../components/ui/Input.jsx";
@@ -8,26 +8,45 @@ import Button from "../../components/ui/Button.jsx";
 import Modal from "../../components/ui/Modal.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import { getBooks, deleteBook } from "../../services/bookService.js";
+import EditBookModal from "../../components/books/EditBookModal.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
 
-export default function AdminCatalogPage() {
+export default function CatalogPage() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [query, setQuery] = useState("");
+  // Seeded from ?search= so a topbar search lands here pre-filtered.
+  const [query, setQuery] = useState(params.get("search") || "");
   const [removing, setRemoving] = useState(null);
+  const [editing, setEditing] = useState(null);
+  const toast = useToast();
 
-  async function load() {
+  async function load(search = query) {
     setLoading(true); setError(null);
-    try { setBooks(await getBooks({ search: query })); }
+    try { setBooks(await getBooks({ search })); }
     catch (e) { setError(e); }
     finally { setLoading(false); }
   }
-  useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    const incoming = params.get("search") || "";
+    setQuery(incoming);
+    load(incoming);
+  }, [params]);
 
   async function confirmRemove() {
-    try { await deleteBook(removing.id); setRemoving(null); load(); }
-    catch (e) { setError(e); setRemoving(null); }
+    const title = removing.title;
+    try {
+      await deleteBook(removing.id);
+      setRemoving(null);
+      toast.success(`Removed “${title}” from the catalog.`);
+      load();
+    } catch (e) {
+      setRemoving(null);
+      toast.error(e.message || "Could not remove that book.");
+    }
   }
 
   return (
@@ -39,7 +58,7 @@ export default function AdminCatalogPage() {
           <div className="toolbar__search">
             <Input placeholder="Search by title…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
-          <Button variant="ghost" onClick={load}>Search</Button>
+          <Button variant="ghost" onClick={() => load()}>Search</Button>
           <Button variant="green" onClick={() => navigate("/librarian/books/new")}><Plus size={16} /> Add New Book</Button>
         </div>
         <DataTable
@@ -48,10 +67,10 @@ export default function AdminCatalogPage() {
             { key: "title", header: "Title" },
             { key: "author", header: "Author" },
             { key: "genre", header: "Genre" },
-            { key: "publishedYear", header: "Year" },
+            { key: "isbn", header: "ISBN" },
             { key: "actions", header: "Actions", render: (r) => (
               <span className="actions-cell">
-                <button className="act-edit"><Pencil size={14} /> Edit</button>
+                <button className="act-edit" onClick={() => setEditing(r)}><Pencil size={14} /> Edit</button>
                 <button className="act-remove" onClick={() => setRemoving(r)}><Trash2 size={14} /> Remove</button>
               </span>
             ) },
@@ -60,6 +79,17 @@ export default function AdminCatalogPage() {
           emptyMessage="No books in the catalog yet."
         />
       </Card>
+
+      {editing && (
+        <EditBookModal
+          book={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(saved) => {
+            setBooks((prev) => prev.map((b) => (b.id === saved.id ? saved : b)));
+            toast.success(`Saved “${saved.title}”.`);
+          }}
+        />
+      )}
 
       {removing && (
         <Modal title="Remove this book?" onClose={() => setRemoving(null)}

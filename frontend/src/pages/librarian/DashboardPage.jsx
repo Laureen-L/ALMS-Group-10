@@ -11,8 +11,20 @@ import Modal from "../../components/ui/Modal.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
 import { useNavigate } from "react-router-dom";
+import LineChart from "../../components/charts/LineChart.jsx";
 import { getLibrarianDashboard } from "../../services/adminService.js";
 import { getBooks, deleteBook } from "../../services/bookService.js";
+import { getTrendsReport, sendOverdueReminders } from "../../services/reportService.js";
+import EditBookModal from "../../components/books/EditBookModal.jsx";
+import { useToast } from "../../context/ToastContext.jsx";
+
+// Turn "2026-07" into "Jul 26" for the trends axis.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function monthLabel(iso) {
+  const [year, month] = String(iso).split("-");
+  const name = MONTHS[Number(month) - 1];
+  return name ? `${name} ${year.slice(2)}` : iso;
+}
 
 export default function LibrarianDashboardPage() {
   const navigate = useNavigate();
@@ -23,20 +35,51 @@ export default function LibrarianDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [removing, setRemoving] = useState(null);
+  const [trends, setTrends] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [remindingId, setRemindingId] = useState(null);
+  const toast = useToast();
 
   async function load() {
     setLoading(true); setError(null);
     try {
-      const [d, b] = await Promise.all([getLibrarianDashboard(), getBooks({ search: query })]);
-      setDash(d); setBooks(b);
+      // Trends is supplementary — a failure there shouldn't blank the dashboard.
+      const [d, b, t] = await Promise.all([
+        getLibrarianDashboard(),
+        getBooks({ search: query }),
+        getTrendsReport().catch(() => []),
+      ]);
+      setDash(d); setBooks(b); setTrends(t);
     } catch (e) { setError(e); }
     finally { setLoading(false); }
   }
   useEffect(() => { load(); }, []);
 
+  async function remind(loan) {
+    setRemindingId(loan.id);
+    try {
+      const res = await sendOverdueReminders(loan.id);
+      if (res.remindersSent > 0) toast.success(`Reminder sent to ${loan.member}.`);
+      else if (res.skipped?.length) toast.info(`${loan.member} has no phone number on file.`);
+      else toast.error(res.failed?.[0]?.reason || "Reminder could not be sent.");
+    } catch (e) {
+      toast.error(e.message || "Reminder could not be sent.");
+    } finally {
+      setRemindingId(null);
+    }
+  }
+
   async function confirmRemove() {
-    try { await deleteBook(removing.id); setRemoving(null); load(); }
-    catch (e) { setError(e); setRemoving(null); }
+    const title = removing.title;
+    try {
+      await deleteBook(removing.id);
+      setRemoving(null);
+      toast.success(`Removed “${title}” from the catalog.`);
+      load();
+    } catch (e) {
+      setRemoving(null);
+      toast.error(e.message || "Could not remove that book.");
+    }
   }
 
   const stats = dash.stats || {};
@@ -49,7 +92,7 @@ export default function LibrarianDashboardPage() {
       <div className="grid-stats">
         <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog"  value={String(stats.totalBooks ?? 0)}   label="Total Books" />
         <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active"  value={String(stats.activeLoans ?? 0)}  label="Active Loans" />
-        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"   value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" />
+        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"   value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/librarian/overdue-loans")} />
         <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Live"     value={String(books.length)} label="Books Listed" />
       </div>
 
@@ -59,6 +102,17 @@ export default function LibrarianDashboardPage() {
             action={<Button variant="outline" style={{ background: "#fff" }} onClick={() => setTab("overdue")}>View Overdue</Button>} />
         </div>
       )}
+
+      <div style={{ margin: "22px 0" }}>
+        <Card title="Borrowing Trends">
+          <LineChart
+            data={trends.map((t) => ({ ...t, label: monthLabel(t.month) }))}
+            xKey="label"
+            yKey="count"
+            height={220}
+          />
+        </Card>
+      </div>
 
       <Card>
         <Tabs active={tab} onChange={setTab} tabs={[
@@ -83,10 +137,10 @@ export default function LibrarianDashboardPage() {
                   { key: "title", header: "Title" },
                   { key: "author", header: "Author" },
                   { key: "genre", header: "Genre" },
-                  { key: "publishedYear", header: "Year" },
+                  { key: "isbn", header: "ISBN" },
                   { key: "actions", header: "Actions", render: (r) => (
                     <span className="actions-cell">
-                      <button className="act-edit"><Pencil size={14} /> Edit</button>
+                      <button className="act-edit" onClick={() => setEditing(r)}><Pencil size={14} /> Edit</button>
                       <button className="act-remove" onClick={() => setRemoving(r)}><Trash2 size={14} /> Remove</button>
                     </span>
                   ) },
@@ -120,7 +174,11 @@ export default function LibrarianDashboardPage() {
                 { key: "title", header: "Book Title" },
                 { key: "due", header: "Due Date" },
                 { key: "status", header: "Status", render: () => <StatusBadge status="overdue" /> },
-                { key: "actions", header: "Action", render: () => <button className="act-edit"><Send size={14} /> Remind</button> },
+                { key: "actions", header: "Action", render: (r) => (
+                  <button className="act-edit" disabled={remindingId === r.id} onClick={() => remind(r)}>
+                    <Send size={14} /> {remindingId === r.id ? "Sending…" : "Remind"}
+                  </button>
+                ) },
               ]}
               rows={dash.overdueList}
               emptyMessage="Nothing overdue."
@@ -128,6 +186,17 @@ export default function LibrarianDashboardPage() {
           )}
         </div>
       </Card>
+
+      {editing && (
+        <EditBookModal
+          book={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(saved) => {
+            setBooks((prev) => prev.map((b) => (b.id === saved.id ? saved : b)));
+            toast.success(`Saved “${saved.title}”.`);
+          }}
+        />
+      )}
 
       {removing && (
         <Modal title="Remove this book?" onClose={() => setRemoving(null)}

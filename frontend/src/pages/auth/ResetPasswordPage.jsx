@@ -8,9 +8,17 @@ import Button from "../../components/ui/Button.jsx";
 import { validatePassword, validateMatch } from "../../utils/validators.js";
 import { resetPassword } from "../../services/authService.js";
 
+// Supabase puts the recovery token in the URL *fragment*
+// (#access_token=…&type=recovery), not the query string — so read both, and
+// prefer the fragment since that's what a real recovery email produces.
+function readRecoveryToken(params) {
+  const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return hash.get("access_token") || params.get("access_token") || params.get("token");
+}
+
 export default function ResetPasswordPage() {
   const [params] = useSearchParams();
-  const token = params.get("token"); // e.g. /reset-password?token=abc123
+  const token = readRecoveryToken(params);
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -26,6 +34,13 @@ export default function ResetPasswordPage() {
     };
     setErrors(next);
     if (next.password || next.confirm) return;
+
+    // Without a token the request can't be authorised — say so here rather
+    // than letting the server return a confusing 400.
+    if (!token) {
+      setErrors({ form: "This reset link is missing its token. Request a new link from the sign-in page." });
+      return;
+    }
 
     setBusy(true);
     try {

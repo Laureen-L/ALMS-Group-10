@@ -73,6 +73,10 @@ model users {
   /// Plain-text passwords are NEVER stored. Satisfies NFR Security.
   password_hash String    @db.Text
 
+  /// Optional contact number, set by the member on their profile page.
+  /// Read by the overdue SMS reminder job. Nullable — never required to borrow.
+  phone         String?   @db.VarChar(20)
+
   /// PostgreSQL ENUM. Assigned on registration (FR-03). Defaults to 'student'.
   role          user_role @default(student)
 
@@ -100,6 +104,9 @@ model users {
 
   /// Fine records owed by this user (FR-18).
   fines            fines[]          @relation("FineUser")
+
+  /// Books this user has saved to their favorites.
+  favorites        favorites[]      @relation("FavoriteUser")
 
   // ------------------------------------------------------------------
   // INDEXES (Data Dictionary §2.1)
@@ -158,6 +165,9 @@ model books {
 
   added_by_user  users?           @relation("BookAddedBy", fields: [added_by], references: [id], onDelete: SetNull)
   borrow_records borrow_records[]
+
+  /// Members who have saved this book to their favorites.
+  favorites      favorites[]
 
   // ------------------------------------------------------------------
   // INDEXES (Data Dictionary §2.2)
@@ -235,6 +245,38 @@ model borrow_records {
   @@index([status],          name: "idx_br_status")      // Overdue loan filter (FR-18)
   @@index([due_date],        name: "idx_br_due_date")    // Used by daily cron job
   @@index([user_id, status], name: "idx_br_user_status") // Member dashboard (FR-14) + 5-book limit check (FR-13)
+}
+
+// =============================================================
+// TABLE: favorites
+// Books a member has saved for later. Purely a convenience list —
+// it carries no lending semantics and nothing else depends on it,
+// so both foreign keys CASCADE on delete.
+// =============================================================
+
+model favorites {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The member who saved the book.
+  user_id String @db.Uuid
+
+  /// The saved book.
+  book_id String @db.Uuid
+
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  user users @relation("FavoriteUser", fields: [user_id], references: [id], onDelete: Cascade)
+  book books @relation(fields: [book_id], references: [id], onDelete: Cascade)
+
+  // ------------------------------------------------------------------
+  // CONSTRAINTS & INDEXES
+  // ------------------------------------------------------------------
+  @@unique([user_id, book_id], name: "favorites_user_id_book_id_key") // one row per member/book
+  @@index([user_id], name: "idx_favorites_user_id")                   // list a member's favorites
 }
 
 // =============================================================

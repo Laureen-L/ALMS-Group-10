@@ -3,8 +3,9 @@
 //   VITE_USE_MOCK=true   -> mock logins (student@/librarian@/admin@), no backend needed
 //   VITE_USE_MOCK=false  -> real POST /auth/login against http://localhost:5000/api
 import { createContext, useContext, useEffect, useState } from "react";
-import { TOKEN_KEY } from "../services/apiClient.js";
+import { TOKEN_KEY, onSessionExpired } from "../services/apiClient.js";
 import { ROLES } from "../constants/roles.js";
+import { useToast } from "./ToastContext.jsx";
 import * as authService from "../services/authService.js";
 
 const AuthContext = createContext(null);
@@ -21,12 +22,24 @@ const MOCK_USERS = {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const toast = useToast();
 
   useEffect(() => {
     const stored = localStorage.getItem(USER_KEY);
-    if (stored) setUser(JSON.parse(stored));
+    // A corrupt entry would otherwise throw and leave the app stuck loading.
+    if (stored) {
+      try { setUser(JSON.parse(stored)); }
+      catch { localStorage.removeItem(USER_KEY); }
+    }
     setLoading(false);
   }, []);
+
+  // The API client ends the session on any 401; clear our copy of the user so
+  // ProtectedRoute bounces to /login instead of rendering a broken page.
+  useEffect(() => onSessionExpired(() => {
+    setUser(null);
+    toast.info("Your session expired. Please sign in again.");
+  }), [toast]);
 
   async function login(email, password) {
     if (USE_MOCK) {
@@ -59,10 +72,14 @@ export function AuthProvider({ children }) {
     setUser(null);
   }
 
+  // Merge fresh profile fields into the signed-in user so the topbar/sidebar
+  // update immediately after a profile save — no logout required.
   function updateLocalUser(data) {
-    const updated = { ...user, ...data };
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    setUser(updated);
+    setUser((prev) => {
+      const updated = { ...prev, ...data };
+      localStorage.setItem(USER_KEY, JSON.stringify(updated));
+      return updated;
+    });
   }
 
   const value = { user, loading, isAuthenticated: !!user, login, logout, updateLocalUser };

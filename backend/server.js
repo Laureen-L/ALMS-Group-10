@@ -16,6 +16,7 @@ app.use('/api/auth', require('./src/routes/authRoutes'));
 app.use('/api/books', require('./src/routes/bookRoutes'));
 app.use('/api', require('./src/routes/borrowRoutes'));
 app.use('/api/admin', require('./src/routes/adminRoutes'));
+app.use('/api/students', require('./src/routes/studentRoutes'));
 
 //Base Health-Check Route
 app.get('/', (req, res) => {

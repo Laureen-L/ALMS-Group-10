@@ -2,7 +2,7 @@
 // On success, sends the user to their role's dashboard.
 // Dev logins (mock): any password. student@ / librarian@ / admin@knust.edu.gh
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Input from "../../components/ui/Input.jsx";
 import Button from "../../components/ui/Button.jsx";
@@ -13,6 +13,9 @@ const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard",
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  // Set by SignUpPage after a successful registration.
+  const notice = location.state?.notice;
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -44,6 +47,7 @@ export default function LoginPage() {
       <h2 className="auth__title">Welcome back</h2>
       <p className="auth__subtitle">Sign in to your library account.</p>
 
+      {notice && <p className="auth__notice" style={{ marginBottom: 12 }}>{notice}</p>}
       {errors.form && <p className="field__error" style={{ marginBottom: 12 }}>{errors.form}</p>}
 
       <div className="stack" style={{ gap: 16 }}>
@@ -66,6 +70,10 @@ export default function LoginPage() {
         <Button type="submit" variant="green" block disabled={busy}>
           {busy ? "Signing in…" : "Sign in"}
         </Button>
+
+        <p className="auth__hint" style={{ textAlign: "center" }}>
+          New here? <Link to="/signup">Create account</Link>
+        </p>
       </div>
     </form>
   );

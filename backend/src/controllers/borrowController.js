@@ -1,7 +1,7 @@
 const supabase = require('../config/supabaseClient');
 
 /*
- * Confirmed real schema (checked directly in Supabase dashboard):
+ * Schema (see prisma/schema.prisma):
  *
  * books
  *   - id, title, author, isbn, genre, quantity, available_quantity,
@@ -11,90 +11,149 @@ const supabase = require('../config/supabaseClient');
  *   - id, user_id, book_id, processed_by, borrow_date, due_date,
  *     return_date, status (enum: 'active' | 'returned' | 'overdue'),
  *     notes, created_at, updated_at
+ *
+ * IMPORTANT — availability is maintained by the database, not here.
+ * The trigger `trg_update_availability` (prisma/migrations/20260623024516_triggers)
+ * decrements books.available_quantity on INSERT of an active loan and
+ * increments it when a loan flips to 'returned'. This controller used to do
+ * the same update by hand, which moved stock by 2 per transaction. The manual
+ * updates have been removed; the trigger is the single source of truth.
  */
 
 const MAX_ACTIVE_BORROWS = 5;
 const LOAN_PERIOD_DAYS = 14;
+const STAFF_ROLES = ['admin', 'librarian'];
+
+// Loans that still count against a member's allowance.
+const OPEN_STATUSES = ['active', 'overdue'];
+
+/**
+ * Find the book being transacted. Accepts either an ISBN (circulation desk,
+ * scanned) or a bookId (student borrowing from the catalog).
+ */
+const resolveBook = async ({ isbn, bookId }) => {
+  if (!isbn && !bookId) {
+    return { error: { status: 400, message: 'Provide either isbn or bookId' } };
+  }
+
+  const query = supabase.from('books').select('id, title, isbn, available_quantity');
+  const { data, error } = isbn
+    ? await query.eq('isbn', isbn).maybeSingle()
+    : await query.eq('id', bookId).maybeSingle();
+
+  if (error) return { error: { status: 400, message: error.message } };
+  if (!data) return { error: { status: 404, message: 'Book not found' } };
+
+  return { book: data };
+};
+
+/**
+ * Work out who the loan is for. Staff at the circulation desk may act on
+ * behalf of a member by email; everyone else borrows for themselves.
+ */
+const resolveBorrower = async (req) => {
+  const { memberEmail } = req.body;
+  if (!memberEmail) return { userId: req.user.id };
+
+  if (!STAFF_ROLES.includes(req.user.role)) {
+    return { error: { status: 403, message: 'Only staff can borrow on behalf of a member' } };
+  }
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('id, is_active')
+    .eq('email', memberEmail)
+    .maybeSingle();
+
+  if (error) return { error: { status: 400, message: error.message } };
+  if (!data) return { error: { status: 404, message: 'Member not found' } };
+  if (data.is_active === false) {
+    return { error: { status: 403, message: 'This member’s account is deactivated' } };
+  }
+
+  return { userId: data.id, onBehalf: true };
+};
 
 /**
  * POST /api/borrow
- * FR-09: user cannot have more than 5 active borrows
+ * Body: { isbn } | { bookId }, plus optional { memberEmail } for staff.
+ * FR-09: no more than 5 open borrows per member
  * FR-10: book must have available_quantity > 0
- * FR-12: create borrow record, due date = today + 14 days
- * FR-13: decrement available_quantity
+ * FR-12: due date = today + 14 days
+ * FR-13: availability adjusted by trg_update_availability
  */
 const borrowBook = async (req, res) => {
   try {
-    const userId = req.user.id; // set by requireAuth middleware
-    const { bookId } = req.body;
-
-    if (!bookId) {
-      return res.status(400).json({ error: 'bookId is required' });
+    const borrower = await resolveBorrower(req);
+    if (borrower.error) {
+      return res.status(borrower.error.status).json({ error: borrower.error.message });
     }
+    const { userId, onBehalf } = borrower;
 
-    // FR-09: check active borrow count for this user
+    const resolved = await resolveBook(req.body);
+    if (resolved.error) {
+      return res.status(resolved.error.status).json({ error: resolved.error.message });
+    }
+    const { book } = resolved;
+
+    // FR-09: count this member's open loans
     const { count: activeBorrowCount, error: countError } = await supabase
       .from('borrow_records')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', userId)
-      .eq('status', 'active');
+      .in('status', OPEN_STATUSES);
 
     if (countError) throw countError;
 
     if (activeBorrowCount >= MAX_ACTIVE_BORROWS) {
       return res.status(400).json({
-        error: `Borrow limit reached. You cannot have more than ${MAX_ACTIVE_BORROWS} active borrows.`,
+        error: `Borrow limit reached. A member cannot have more than ${MAX_ACTIVE_BORROWS} books out at once.`,
       });
     }
 
-    // FR-10: check book availability
-    const { data: book, error: bookError } = await supabase
-      .from('books')
-      .select('id, available_quantity')
-      .eq('id', bookId)
-      .single();
-if (bookError || !book) {
- 
-  return res.status(404).json({ error: 'Book not found' });
-}
-
+    // FR-10: stock check
     if (book.available_quantity <= 0) {
-      return res.status(400).json({ error: 'No available copies of this book' });
+      return res.status(400).json({ error: 'No copies available' });
     }
 
-    // FR-12: create the borrow record with due date = today + 14 days
+    // Don't let the same member take a second copy of a book they already hold.
+    const { count: alreadyHolding, error: dupError } = await supabase
+      .from('borrow_records')
+      .select('*', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('book_id', book.id)
+      .in('status', OPEN_STATUSES);
+
+    if (dupError) throw dupError;
+    if (alreadyHolding > 0) {
+      return res.status(400).json({ error: 'This member already has a copy of this book on loan' });
+    }
+
+    // FR-12: due date = borrow date + 14 days. borrow_date/due_date are DATE
+    // columns, so send plain YYYY-MM-DD rather than a full timestamp.
     const borrowDate = new Date();
     const dueDate = new Date(borrowDate);
     dueDate.setDate(dueDate.getDate() + LOAN_PERIOD_DAYS);
+    const asDate = (d) => d.toISOString().slice(0, 10);
 
     const { data: borrowRecord, error: insertError } = await supabase
       .from('borrow_records')
       .insert({
         user_id: userId,
-        book_id: bookId,
-        borrow_date: borrowDate.toISOString(),
-        due_date: dueDate.toISOString(),
+        book_id: book.id,
+        // Records who ran the transaction when a librarian did it at the desk.
+        processed_by: onBehalf ? req.user.id : null,
+        borrow_date: asDate(borrowDate),
+        due_date: asDate(dueDate),
         status: 'active',
       })
-      .select()
+      .select('*, books(title, author, isbn)')
       .single();
 
     if (insertError) throw insertError;
 
-    // FR-13: decrement available_quantity
-    const { error: updateError } = await supabase
-      .from('books')
-      .update({ available_quantity: book.available_quantity - 1 })
-      .eq('id', bookId);
-
-    if (updateError) {
-      // Best-effort rollback of the borrow record since Supabase JS
-      // doesn't give us a multi-table transaction here.
-      await supabase.from('borrow_records').delete().eq('id', borrowRecord.id);
-      throw updateError;
-    }
-
     return res.status(201).json({
+      success: true,
       message: 'Book borrowed successfully',
       borrow: borrowRecord,
     });
@@ -106,30 +165,60 @@ if (bookError || !book) {
 
 /**
  * POST /api/return
- * FR-11: mark the borrow record as returned
- * FR-12: set return_date
- * FR-13: increment available_quantity
+ * Body: { borrowId } | { isbn }
+ * A member may return only their own loan; staff may return anyone's, which is
+ * what makes the ISBN path work at the desk.
+ * FR-11/FR-12: mark returned + stamp return_date
+ * FR-13: availability adjusted by trg_update_availability
  */
 const returnBook = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { borrowId } = req.body;
+    const { borrowId, isbn } = req.body;
+    const isStaff = STAFF_ROLES.includes(req.user.role);
 
-    if (!borrowId) {
-      return res.status(400).json({ error: 'borrowId is required' });
-    }
-   
-    const { data: borrowRecord, error: fetchError } = await supabase
-      .from('borrow_records')
-      .select('*')
-      .eq('id', borrowId)
-      .single();
-
-    if (fetchError || !borrowRecord) {
-      return res.status(404).json({ error: 'Borrow record not found' });
+    if (!borrowId && !isbn) {
+      return res.status(400).json({ error: 'Provide either borrowId or isbn' });
     }
 
-    if (borrowRecord.user_id !== userId) {
+    let borrowRecord;
+
+    if (borrowId) {
+      const { data, error } = await supabase
+        .from('borrow_records')
+        .select('*')
+        .eq('id', borrowId)
+        .maybeSingle();
+
+      if (error) return res.status(400).json({ error: error.message });
+      if (!data) return res.status(404).json({ error: 'Borrow record not found' });
+      borrowRecord = data;
+    } else {
+      // ISBN path: find the open loan for that book. A member returning by
+      // ISBN can only match their own loan; staff match whoever holds it.
+      const resolved = await resolveBook({ isbn });
+      if (resolved.error) {
+        return res.status(resolved.error.status).json({ error: resolved.error.message });
+      }
+
+      let query = supabase
+        .from('borrow_records')
+        .select('*')
+        .eq('book_id', resolved.book.id)
+        .in('status', OPEN_STATUSES)
+        .order('borrow_date', { ascending: true })
+        .limit(1);
+
+      if (!isStaff) query = query.eq('user_id', req.user.id);
+
+      const { data, error } = await query;
+      if (error) return res.status(400).json({ error: error.message });
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: 'No open loan found for this book' });
+      }
+      borrowRecord = data[0];
+    }
+
+    if (!isStaff && borrowRecord.user_id !== req.user.id) {
       return res.status(403).json({ error: 'This borrow record does not belong to you' });
     }
 
@@ -137,34 +226,20 @@ const returnBook = async (req, res) => {
       return res.status(400).json({ error: 'This book has already been returned' });
     }
 
-    // FR-11: mark as returned
     const { data: updatedBorrow, error: updateBorrowError } = await supabase
       .from('borrow_records')
       .update({
         status: 'returned',
-        return_date: new Date().toISOString(),
+        return_date: new Date().toISOString().slice(0, 10),
       })
-      .eq('id', borrowId)
-      .select()
+      .eq('id', borrowRecord.id)
+      .select('*, books(title, author, isbn)')
       .single();
 
     if (updateBorrowError) throw updateBorrowError;
 
-    // FR-13: increment available_quantity back on the book
-    const { data: book, error: bookError } = await supabase
-      .from('books')
-      .select('id, available_quantity')
-      .eq('id', borrowRecord.book_id)
-      .single();
-
-    if (!bookError && book) {
-      await supabase
-        .from('books')
-        .update({ available_quantity: book.available_quantity + 1 })
-        .eq('id', book.id);
-    }
-
     return res.status(200).json({
+      success: true,
       message: 'Book returned successfully',
       borrow: updatedBorrow,
     });

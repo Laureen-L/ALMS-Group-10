@@ -14,15 +14,23 @@
 //     loading={loading}
 //     emptyMessage="No borrowings yet."
 //   />
+import { SkeletonRows } from "../ui/Skeleton.jsx";
+
 export default function DataTable({
   columns = [], rows = [], loading = false, error = null,
   emptyMessage = "Nothing to show yet.", rowKey = "id", onRowClick,
 }) {
+  // Skeleton rather than a spinner: the table keeps its height, so content
+  // doesn't jump into place when the data arrives.
   if (loading) {
-    return <div className="state"><div className="state__spinner" />Loading…</div>;
+    return <div style={{ padding: "8px 0" }}><SkeletonRows rows={5} /></div>;
   }
   if (error) {
-    return <div className="state">Couldn’t load this data. {error.message || ""}</div>;
+    return (
+      <div className="state">
+        {error.isNetworkError ? error.message : `Couldn’t load this data. ${error.message || ""}`}
+      </div>
+    );
   }
 
   return (
