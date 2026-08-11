@@ -98,6 +98,17 @@ export async function getBook(id) {
 // POST /books  (librarian/admin) -> { message, book }
 // New stock starts fully available, so available_quantity mirrors quantity.
 export async function createBook({ title, author, isbn, genre, quantity = 1 }) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const qty = Number(quantity) || 1;
+    const nextId = MOCK_BOOKS.reduce((max, b) => Math.max(max, Number(b.id) || 0), 0) + 1;
+    const book = {
+      id: nextId, title, author, genre,
+      isbn: isbn?.trim() ? isbn.trim() : null,
+      available: qty > 0, availableQuantity: qty, qty,
+    };
+    MOCK_BOOKS.push(book);
+    return book;
+  }
   const res = await api.post("/books", {
     title,
     author,
@@ -111,11 +122,22 @@ export async function createBook({ title, author, isbn, genre, quantity = 1 }) {
 
 // PUT /books/:id -> { message, book }
 export async function updateBook(id, patch) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const i = MOCK_BOOKS.findIndex((b) => String(b.id) === String(id));
+    if (i === -1) throw new Error("Book not found in mock data.");
+    MOCK_BOOKS[i] = { ...MOCK_BOOKS[i], ...patch };
+    return MOCK_BOOKS[i];
+  }
   const res = await api.put(`/books/${id}`, patch);
   return mapBook(res.book);
 }
 
 // DELETE /books/:id -> { message }
 export async function deleteBook(id) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const i = MOCK_BOOKS.findIndex((b) => String(b.id) === String(id));
+    if (i !== -1) MOCK_BOOKS.splice(i, 1);
+    return { success: true, message: "Book removed" };
+  }
   return api.del(`/books/${id}`);
 }

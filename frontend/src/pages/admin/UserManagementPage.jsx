@@ -1,6 +1,7 @@
 // Admin — User Management. Real members (GET /admin/members) with per-row
 // role changes and account activation.
 import { useState, useEffect } from "react";
+import { KeyRound } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Input from "../../components/ui/Input.jsx";
 import Select from "../../components/ui/Select.jsx";
@@ -10,7 +11,7 @@ import Modal from "../../components/ui/Modal.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import { getMembers } from "../../services/adminService.js";
 import {
-  updateMemberRole, deactivateMember, reactivateMember,
+  updateMemberRole, deactivateMember, reactivateMember, resetMemberPassword,
 } from "../../services/userService.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
@@ -49,6 +50,16 @@ function EditMemberModal({ member, isSelf, onClose, onSaved }) {
   const handleDeactivate = () => run(() => deactivateMember(member.id), { isActive: false }, `${member.name}'s account was deactivated.`);
   const handleReactivate = () => run(() => reactivateMember(member.id), { isActive: true }, `${member.name}'s account was reactivated.`);
 
+  // Reset keeps the modal open (no state to patch on the row).
+  async function handleReset() {
+    setBusy(true); setError(null);
+    try {
+      await resetMemberPassword(member.id);
+      toast.success(`Password reset link sent to ${member.email}.`);
+    } catch (e) { setError(e); }
+    finally { setBusy(false); }
+  }
+
   return (
     <Modal title={`Edit ${member.name}`} onClose={onClose}>
       {error && <p className="field__error" style={{ marginBottom: 12 }}>{error.message}</p>}
@@ -73,6 +84,10 @@ function EditMemberModal({ member, isSelf, onClose, onSaved }) {
       <div className="row" style={{ marginTop: 20, gap: 8, flexWrap: "wrap" }}>
         <Button variant="green" onClick={handleSaveRole} loading={busy} disabled={isSelf || role === member.role}>
           {busy ? "Saving…" : "Save Role"}
+        </Button>
+
+        <Button variant="outline" onClick={handleReset} disabled={busy}>
+          <KeyRound size={15} /> Reset Password
         </Button>
 
         {active ? (

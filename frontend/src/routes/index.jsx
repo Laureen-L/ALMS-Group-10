@@ -34,6 +34,7 @@ const AdminDashboard = lazy(() => import("../pages/admin/DashboardPage.jsx"));
 const UserManagement = lazy(() => import("../pages/admin/UserManagementPage.jsx"));
 const BorrowRecords = lazy(() => import("../pages/admin/BorrowRecordsPage.jsx"));
 const Reports = lazy(() => import("../pages/admin/ReportsPage.jsx"));
+const SystemHealth = lazy(() => import("../pages/admin/SystemHealthPage.jsx"));
 // shared
 const SettingsPage = lazy(() => import("../pages/shared/SettingsPage.jsx"));
 const ProfilePage = lazy(() => import("../pages/shared/ProfilePage.jsx"));
@@ -87,6 +88,7 @@ export default function AppRoutes() {
           <Route path="/admin/borrow-records" element={<BorrowRecords />} />
           <Route path="/admin/overdue-loans" element={<OverdueLoansPage />} />
           <Route path="/admin/reports" element={<Reports />} />
+          <Route path="/admin/system" element={<SystemHealth />} />
         </Route>
 
         {/* Any signed-in role — RoleLayout picks the matching portal shell,

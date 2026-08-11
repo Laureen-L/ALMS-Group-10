@@ -33,6 +33,21 @@ export async function getTrendsReport() {
   return Array.isArray(data) ? data : [];
 }
 
+// GET /admin/reports/overdue-trends -> [{ month: "2026-07", count }]
+// Monthly count of loans that went overdue — the librarian's early-warning line.
+export async function getOverdueTrend() {
+  if (USE_MOCK()) {
+    return [
+      { month: "2026-02", count: 2 }, { month: "2026-03", count: 4 },
+      { month: "2026-04", count: 3 }, { month: "2026-05", count: 6 },
+      { month: "2026-06", count: 5 }, { month: "2026-07", count: 8 },
+      { month: "2026-08", count: 3 },
+    ];
+  }
+  const data = await api.get("/admin/reports/overdue-trends");
+  return Array.isArray(data) ? data : [];
+}
+
 // GET /admin/reports/top-books -> [{ title, author, borrow_count }]
 export async function getTopBooks() {
   if (USE_MOCK()) {

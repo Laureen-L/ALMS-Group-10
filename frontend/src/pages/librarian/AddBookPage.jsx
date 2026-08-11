@@ -3,14 +3,17 @@
 // There is NO published_year column — do not send one.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft, Save, ScanLine } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Input from "../../components/ui/Input.jsx";
 import Select from "../../components/ui/Select.jsx";
 import Button from "../../components/ui/Button.jsx";
+import BarcodeScanner from "../../components/books/BarcodeScanner.jsx";
 import { validateRequired } from "../../utils/validators.js";
 import { createBook } from "../../services/bookService.js";
+import { lookupIsbn } from "../../services/isbnLookup.js";
 import { GENRES } from "../../constants/genres.js";
+import { useToast } from "../../context/ToastContext.jsx";
 
 export default function AddBookPage() {
   const navigate = useNavigate();
@@ -19,7 +22,36 @@ export default function AddBookPage() {
   });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [looking, setLooking] = useState(false);
+  const toast = useToast();
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  // After a barcode is read: store the ISBN, then look the book up and pre-fill.
+  async function handleScanned(code) {
+    setScanning(false);
+    setForm((f) => ({ ...f, isbn: code }));
+    setLooking(true);
+    try {
+      const found = await lookupIsbn(code);
+      if (found) {
+        setForm((f) => ({
+          ...f,
+          isbn: found.isbn || code,
+          title: found.title || f.title,
+          author: found.author || f.author,
+          genre: found.genre || f.genre,
+        }));
+        toast.success(`Found “${found.title || code}” — check the details and save.`);
+      } else {
+        toast.info(`Scanned ${code}, but no match was found. Enter the details manually.`);
+      }
+    } catch (e) {
+      toast.error(e.message || "Lookup failed. Enter the details manually.");
+    } finally {
+      setLooking(false);
+    }
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -54,6 +86,16 @@ export default function AddBookPage() {
       <form onSubmit={onSubmit}>
         <Card>
           {errors.form && <p className="field__error" style={{ marginBottom: 12 }}>{errors.form}</p>}
+
+          <div className="row row--between" style={{ alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 16, padding: "12px 14px", background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: "var(--radius)" }}>
+            <span className="page-sub" style={{ margin: 0 }}>
+              {looking ? "Looking up book details…" : "Scan a book’s barcode to auto-fill its details."}
+            </span>
+            <Button type="button" variant="gold" onClick={() => setScanning(true)} disabled={looking}>
+              <ScanLine size={16} /> Scan ISBN
+            </Button>
+          </div>
+
           <div className="form-grid">
             <Input label="Title" value={form.title} onChange={set("title")} error={errors.title} />
             <Input label="Author" value={form.author} onChange={set("author")} error={errors.author} />
@@ -82,6 +124,10 @@ export default function AddBookPage() {
           </div>
         </Card>
       </form>
+
+      {scanning && (
+        <BarcodeScanner onDetected={handleScanned} onClose={() => setScanning(false)} />
+      )}
     </div>
   );
 }

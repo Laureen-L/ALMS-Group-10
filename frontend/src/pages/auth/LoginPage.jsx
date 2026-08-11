@@ -10,6 +10,14 @@ import { validateEmail, validateRequired } from "../../utils/validators.js";
 
 const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard", admin: "/admin/dashboard" };
 
+// Only shown in demo/mock mode — hidden automatically once real logins are on.
+const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
+const DEMO_ACCOUNTS = [
+  { label: "Student",   email: "student@knust.edu.gh" },
+  { label: "Librarian", email: "librarian@knust.edu.gh" },
+  { label: "Admin",     email: "admin@knust.edu.gh" },
+];
+
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -21,6 +29,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
+
+  // Fill the form from a demo account so testers don't have to type anything.
+  function useDemo(account) {
+    setEmail(account.email);
+    setPassword("demo1234");
+    setErrors({});
+  }
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -74,6 +89,26 @@ export default function LoginPage() {
         <p className="auth__hint" style={{ textAlign: "center" }}>
           New here? <Link to="/signup">Create account</Link>
         </p>
+
+        {USE_MOCK && (
+          <div style={{ marginTop: 8, padding: "12px 14px", background: "var(--surface)", border: "1px dashed var(--border)", borderRadius: "var(--radius)" }}>
+            <p style={{ margin: "0 0 8px", fontSize: 13, color: "var(--muted)" }}>
+              Demo accounts — tap one, any password works:
+            </p>
+            <div className="row" style={{ flexWrap: "wrap", gap: 8 }}>
+              {DEMO_ACCOUNTS.map((a) => (
+                <button
+                  key={a.email}
+                  type="button"
+                  onClick={() => useDemo(a)}
+                  style={{ cursor: "pointer", fontSize: 13, padding: "6px 12px", borderRadius: "var(--radius-pill)", border: "1px solid var(--border)", background: "var(--cream, #fff)", color: "var(--ink)" }}
+                >
+                  {a.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </form>
   );
