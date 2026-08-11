@@ -7,13 +7,23 @@ const {
   getBorrowRecords,
   getOverdueRecords,
   getAdminStats,
+  updateMemberRole,
+  deactivateMember,
 } = require('../controllers/adminController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 // Student Dashboard - authenticated users only
-// Full URL: GET /api/admin/student/dashboard/:id
-router.get('/student/dashboard/:id', requireAuth, getStudentDashboard);
+// Full URL: GET /api/admin/stats
+router.get('/stats', requireAuth, requireRole(['admin']), getAdminStats);
 
+// Task 8 (Dev D): Role Change + Account Deactivation
+// Full URL: PUT /api/admin/members/:id/role
+router.put('/members/:id/role', requireAuth, requireRole(['admin']), updateMemberRole);
+
+// Full URL: PUT /api/admin/members/:id/deactivate
+router.put('/members/:id/deactivate', requireAuth, requireRole(['admin']), deactivateMember);
+
+module.exports = router;
 // Librarian Dashboard
 // Full URL: GET /api/admin/librarian/dashboard
 router.get('/librarian/dashboard', requireAuth, requireRole(['librarian', 'admin']), getLibrarianDashboard);

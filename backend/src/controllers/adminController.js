@@ -239,7 +239,62 @@ const getAdminStats = async (req, res) => {
     return res.status(500).json({ error: 'Failed to fetch admin stats' });
   }
 };
+/**
+ * PUT /api/admin/members/:id/role
+ * Task 8 (Dev D): change a member's role
+ */
+const VALID_ROLES = ['student', 'librarian', 'admin'];
 
+const updateMemberRole = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    if (!role || !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: `role must be one of: ${VALID_ROLES.join(', ')}` });
+    }
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ role })
+      .eq('id', id)
+      .select('id, full_name, email, role, is_active')
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Member not found' });
+
+    return res.status(200).json({ success: true, member: data });
+  } catch (err) {
+    console.error('updateMemberRole error:', err);
+    return res.status(500).json({ error: 'Failed to update member role' });
+  }
+};
+
+/**
+ * PUT /api/admin/members/:id/deactivate
+ * Task 8 (Dev D): deactivate a member's account (soft-disable, FR-04 style)
+ */
+const deactivateMember = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data, error } = await supabase
+      .from('users')
+      .update({ is_active: false })
+      .eq('id', id)
+      .select('id, full_name, email, role, is_active')
+      .single();
+
+    if (error) throw error;
+    if (!data) return res.status(404).json({ error: 'Member not found' });
+
+    return res.status(200).json({ success: true, member: data });
+  } catch (err) {
+    console.error('deactivateMember error:', err);
+    return res.status(500).json({ error: 'Failed to deactivate member' });
+  }
+};
 module.exports = {
   getStudentDashboard,
   getLibrarianDashboard,
