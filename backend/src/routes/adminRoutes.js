@@ -9,19 +9,31 @@ const {
   getAdminStats,
   updateMemberRole,
   deactivateMember,
+  getGenreReport,
+  getBorrowingTrends,
+  getTopBooks,
 } = require('../controllers/adminController');
-const { requireAuth, requireRole } = require('../middleware/authMiddleware');
-
 // Student Dashboard - authenticated users only
 // Full URL: GET /api/admin/stats
 router.get('/stats', requireAuth, requireRole(['admin']), getAdminStats);
 
 // Task 8 (Dev D): Role Change + Account Deactivation
-// Full URL: PUT /api/admin/members/:id/role
-router.put('/members/:id/role', requireAuth, requireRole(['admin']), updateMemberRole);
-
 // Full URL: PUT /api/admin/members/:id/deactivate
 router.put('/members/:id/deactivate', requireAuth, requireRole(['admin']), deactivateMember);
+
+// Task 9 (Dev D): Reports Endpoints
+// Full URL: PUT /api/admin/members/:id/deactivate
+router.put('/members/:id/deactivate', requireAuth, requireRole(['admin']), deactivateMember);
+
+// Task 9 (Dev D): Reports Endpoints
+// Full URL: GET /api/admin/reports/genres
+router.get('/reports/genres', requireAuth, requireRole(['admin']), getGenreReport);
+
+// Full URL: GET /api/admin/reports/trends
+router.get('/reports/trends', requireAuth, requireRole(['admin']), getBorrowingTrends);
+
+// Full URL: GET /api/admin/reports/top-books
+router.get('/reports/top-books', requireAuth, requireRole(['admin']), getTopBooks);
 
 module.exports = router;
 // Librarian Dashboard

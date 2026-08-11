@@ -295,6 +295,100 @@ const deactivateMember = async (req, res) => {
     return res.status(500).json({ error: 'Failed to deactivate member' });
   }
 };
+/**
+ * GET /api/admin/reports/genres
+ * Task 9 (Dev D): book count per genre, for the admin genre pie chart
+ */
+const getGenreReport = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('books')
+      .select('genre');
+
+    if (error) throw error;
+
+    const counts = {};
+    (data || []).forEach((b) => {
+      const genre = b.genre || 'Uncategorized';
+      counts[genre] = (counts[genre] || 0) + 1;
+    });
+
+    const report = Object.entries(counts)
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count);
+
+    return res.status(200).json(report);
+  } catch (err) {
+    console.error('getGenreReport error:', err);
+    return res.status(500).json({ error: 'Failed to fetch genre report' });
+  }
+};
+
+/**
+ * GET /api/admin/reports/trends
+ * Task 9 (Dev D): borrowing trends per month, for the admin trends line chart
+ */
+const getBorrowingTrends = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('borrow_records')
+      .select('borrow_date');
+
+    if (error) throw error;
+
+    const monthly = {};
+    (data || []).forEach((r) => {
+      if (!r.borrow_date) return;
+      const month = String(r.borrow_date).slice(0, 7); // "2026-07"
+      monthly[month] = (monthly[month] || 0) + 1;
+    });
+
+    const trends = Object.entries(monthly)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, count]) => ({ month, count }));
+
+    return res.status(200).json(trends);
+  } catch (err) {
+    console.error('getBorrowingTrends error:', err);
+    return res.status(500).json({ error: 'Failed to fetch borrowing trends' });
+  }
+};
+
+/**
+ * GET /api/admin/reports/top-books
+ * Task 9 (Dev D): top 10 most borrowed books
+ */
+const getTopBooks = async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('borrow_records')
+      .select('book_id, books(title, author)');
+
+    if (error) throw error;
+
+    const counts = {};
+    (data || []).forEach((r) => {
+      if (!r.book_id) return;
+      if (!counts[r.book_id]) {
+        counts[r.book_id] = {
+          title: r.books?.title || 'Unknown',
+          author: r.books?.author || 'Unknown',
+          borrows: 0,
+        };
+      }
+      counts[r.book_id].borrows += 1;
+    });
+
+    const topBooks = Object.values(counts)
+      .sort((a, b) => b.borrows - a.borrows)
+      .slice(0, 10);
+
+    return res.status(200).json(topBooks);
+  } catch (err) {
+    console.error('getTopBooks error:', err);
+    return res.status(500).json({ error: 'Failed to fetch top books' });
+  }
+};
 module.exports = {
   getStudentDashboard,
   getLibrarianDashboard,
@@ -302,4 +396,9 @@ module.exports = {
   getBorrowRecords,
   getOverdueRecords,
   getAdminStats,
+  updateMemberRole,
+  deactivateMember,
+  getGenreReport,
+  getBorrowingTrends,
+  getTopBooks,
 };
