@@ -51,7 +51,7 @@ export default function SignUpPage() {
 
       <div className="stack" style={{ gap: 16 }}>
         <Input
-          id="full_name" label="Full name" placeholder="Kwame Nkrumah"
+          id="full_name" label="Full name" placeholder="Your full name"
           value={fullName} onChange={(e) => setFullName(e.target.value)} error={errors.fullName}
         />
         <Input
