@@ -11,6 +11,5 @@ export default function RoleLayout() {
 
   if (user?.role === ROLES.ADMIN) return <AdminLayout role={ROLES.ADMIN} />;
   if (user?.role === ROLES.LIBRARIAN) return <AdminLayout role={ROLES.LIBRARIAN} />;
-  if (user?.role === ROLES.IT) return <AdminLayout role={ROLES.IT} />;
   return <StudentLayout />;
 }

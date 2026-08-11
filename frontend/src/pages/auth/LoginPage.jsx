@@ -8,7 +8,7 @@ import Input from "../../components/ui/Input.jsx";
 import Button from "../../components/ui/Button.jsx";
 import { validateEmail, validateRequired } from "../../utils/validators.js";
 
-const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard", admin: "/admin/dashboard", it: "/it/dashboard" };
+const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard", admin: "/admin/dashboard" };
 
 // Only shown in demo/mock mode — hidden automatically once real logins are on.
 const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "false";
@@ -16,7 +16,6 @@ const DEMO_ACCOUNTS = [
   { label: "Student",   email: "student@knust.edu.gh" },
   { label: "Librarian", email: "librarian@knust.edu.gh" },
   { label: "Admin",     email: "admin@knust.edu.gh" },
-  { label: "IT",        email: "it@knust.edu.gh" },
 ];
 
 export default function LoginPage() {

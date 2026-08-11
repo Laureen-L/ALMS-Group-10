@@ -17,7 +17,6 @@ const MOCK_USERS = {
   "student@knust.edu.gh":   { id: 1, name: "Kwame Nkrumah",  role: ROLES.STUDENT,   email: "student@knust.edu.gh" },
   "librarian@knust.edu.gh": { id: 2, name: "Ama Serwaa",     role: ROLES.LIBRARIAN, email: "librarian@knust.edu.gh" },
   "admin@knust.edu.gh":     { id: 3, name: "Dr. Isaac Manu", role: ROLES.ADMIN,     email: "admin@knust.edu.gh" },
-  "it@knust.edu.gh":        { id: 5, name: "Nana Adjei",     role: ROLES.IT,        email: "it@knust.edu.gh" },
 };
 
 export function AuthProvider({ children }) {
@@ -46,7 +45,7 @@ export function AuthProvider({ children }) {
     if (USE_MOCK) {
       const key = (email || "").trim().toLowerCase();
       const found = MOCK_USERS[key];
-      if (!found) throw new Error("No account for that email. Use student@, librarian@, admin@ or it@knust.edu.gh");
+      if (!found) throw new Error("No account for that email. Use student@, librarian@ or admin@knust.edu.gh");
       localStorage.setItem(TOKEN_KEY, "mock-jwt-token");
       localStorage.setItem(USER_KEY, JSON.stringify(found));
       setUser(found);

@@ -2,7 +2,7 @@
 import {
   LayoutDashboard, Search, BookMarked, User, Settings,
   Users, ClipboardList, BookOpen, AlertTriangle, BarChart3, PlusSquare, FolderOpen,
-  ArrowLeftRight, ShieldCheck, Activity,
+  ArrowLeftRight, Activity,
 } from "lucide-react";
 
 export const NAV = {
@@ -28,13 +28,8 @@ export const NAV = {
     { to: "/admin/users",          label: "User Management", icon: Users },
     { to: "/admin/borrow-records", label: "Borrow Records",  icon: ClipboardList },
     { to: "/admin/reports",        label: "Reports",         icon: BarChart3 },
+    { to: "/admin/system",         label: "System Health",   icon: Activity },
     { to: "/profile",              label: "Profile",         icon: User },
-  ],
-  it: [
-    { to: "/it/dashboard", label: "System Overview", icon: LayoutDashboard },
-    { to: "/it/users",     label: "User Accounts",   icon: Users },
-    { to: "/it/health",    label: "System Health",   icon: Activity },
-    { to: "/profile",      label: "Profile",         icon: User },
   ],
 };
 
@@ -42,7 +37,6 @@ export const BRAND = {
   student:   { title: "Student Portal", sub: "Student Services" },
   librarian: { title: "Librarian Portal",   sub: "Library Management" },
   admin:     { title: "Admin Portal",   sub: "Library Management" },
-  it:        { title: "IT Admin",       sub: "System & Accounts" },
 };
 
-export { Settings, FolderOpen, ShieldCheck };
+export { Settings, FolderOpen };
