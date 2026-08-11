@@ -2,7 +2,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext.jsx";
 
-const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard", admin: "/admin/dashboard" };
+const HOME = { student: "/student/dashboard", librarian: "/librarian/dashboard", admin: "/admin/dashboard", it: "/it/dashboard" };
 
 export default function HomeRedirect() {
   const { user, loading } = useAuth();

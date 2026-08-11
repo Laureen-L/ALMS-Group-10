@@ -23,6 +23,12 @@ export async function reactivateMember(memberId) {
   return api.put(`/admin/members/${memberId}/reactivate`);
 }
 
+// POST /admin/members/:id/reset-password (IT/admin) — emails a reset link.
+export async function resetMemberPassword(memberId) {
+  if (USE_MOCK()) return { success: true, message: "Password reset link sent." };
+  return api.post(`/admin/members/${memberId}/reset-password`);
+}
+
 // GET /auth/members/lookup?email= (staff only)
 export async function lookupMember(email) {
   if (USE_MOCK()) {

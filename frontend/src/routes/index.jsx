@@ -34,6 +34,10 @@ const AdminDashboard = lazy(() => import("../pages/admin/DashboardPage.jsx"));
 const UserManagement = lazy(() => import("../pages/admin/UserManagementPage.jsx"));
 const BorrowRecords = lazy(() => import("../pages/admin/BorrowRecordsPage.jsx"));
 const Reports = lazy(() => import("../pages/admin/ReportsPage.jsx"));
+// IT
+const ITDashboard = lazy(() => import("../pages/it/DashboardPage.jsx"));
+const ITUsers = lazy(() => import("../pages/it/UserManagementPage.jsx"));
+const ITHealth = lazy(() => import("../pages/it/SystemHealthPage.jsx"));
 // shared
 const SettingsPage = lazy(() => import("../pages/shared/SettingsPage.jsx"));
 const ProfilePage = lazy(() => import("../pages/shared/ProfilePage.jsx"));
@@ -45,6 +49,7 @@ const Fallback = () => <div className="state"><div className="state__spinner" />
 // Librarian uses the admin shell with its own nav.
 const LibrarianShell = () => <AdminLayout role={ROLES.LIBRARIAN} />;
 const AdminShell = () => <AdminLayout role={ROLES.ADMIN} />;
+const ITShell = () => <AdminLayout role={ROLES.IT} />;
 
 export default function AppRoutes() {
   return (
@@ -87,6 +92,13 @@ export default function AppRoutes() {
           <Route path="/admin/borrow-records" element={<BorrowRecords />} />
           <Route path="/admin/overdue-loans" element={<OverdueLoansPage />} />
           <Route path="/admin/reports" element={<Reports />} />
+        </Route>
+
+        {/* IT personnel */}
+        <Route element={<ProtectedRoute><RoleRoute allow={[ROLES.IT]}><ITShell /></RoleRoute></ProtectedRoute>}>
+          <Route path="/it/dashboard" element={<ITDashboard />} />
+          <Route path="/it/users" element={<ITUsers />} />
+          <Route path="/it/health" element={<ITHealth />} />
         </Route>
 
         {/* Any signed-in role — RoleLayout picks the matching portal shell,

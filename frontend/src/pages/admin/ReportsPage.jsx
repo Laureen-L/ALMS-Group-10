@@ -1,8 +1,11 @@
-// SCREEN 8 — Reports & Analytics. Five reports off /api/admin/reports/*.
-import { useState, useEffect } from "react";
-import { AlertTriangle, Send } from "lucide-react";
+// SCREEN 8 — Reports & Analytics. Reports off /api/admin/reports/*, with KPI
+// cards, a date-range filter on the trend line, and CSV / print export.
+import { useState, useEffect, useMemo } from "react";
+import { AlertTriangle, Send, Library, BookCopy, Percent, Download, Printer } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Button from "../../components/ui/Button.jsx";
+import Select from "../../components/ui/Select.jsx";
+import StatCard from "../../components/stats/StatCard.jsx";
 import DonutChart from "../../components/charts/DonutChart.jsx";
 import LineChart from "../../components/charts/LineChart.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
@@ -10,6 +13,24 @@ import {
   getGenreReport, getTrendsReport, getTopBooks,
   getOverdueRate, getTopBorrowers, sendOverdueReminders,
 } from "../../services/reportService.js";
+
+// Build a CSV string from rows of objects and trigger a browser download.
+function downloadCsv(filename, rows) {
+  if (!rows.length) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+const RANGE_OPTIONS = [
+  { value: "3", label: "Last 3 months" },
+  { value: "6", label: "Last 6 months" },
+  { value: "12", label: "Last 12 months" },
+];
 
 // Turn "2026-07" into "Jul 2026" for the trends axis.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -48,6 +69,9 @@ export default function ReportsPage() {
   const [topBorrowers, setTopBorrowers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Date range for the trend line (months back).
+  const [range, setRange] = useState("12");
 
   // SMS reminders
   const [sending, setSending] = useState(false);
@@ -94,13 +118,38 @@ export default function ReportsPage() {
   if (loading) return <div className="state"><div className="state__spinner" />Loading reports…</div>;
   if (error) return <div className="state">Couldn’t load reports. {error.message}</div>;
 
-  const trendData = trends.map((t) => ({ ...t, label: monthLabel(t.month) }));
+  const trendData = trends
+    .slice(-Number(range))
+    .map((t) => ({ ...t, label: monthLabel(t.month) }));
   const rateIsHealthy = (overdueRate?.rate ?? 0) < 10;
+
+  const totalBorrows = trends.reduce((sum, t) => sum + (t.count || 0), 0);
+  const collectionSize = genres.reduce((sum, g) => sum + (g.count || 0), 0);
+  const topGenre = genres.reduce((best, g) => (g.count > (best?.count ?? -1) ? g : best), null);
+
+  function exportCsv() {
+    downloadCsv("alms-borrowing-trends.csv", trends.map((t) => ({ month: t.month, borrows: t.count })));
+  }
 
   return (
     <div>
-      <h1 className="page-title">Library Reports</h1>
-      <p className="page-sub">Collection, lending and overdue analytics.</p>
+      <div className="row row--between" style={{ alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 className="page-title">Library Reports</h1>
+          <p className="page-sub">Collection, lending and overdue analytics.</p>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <Button variant="ghost" onClick={exportCsv}><Download size={16} /> Export CSV</Button>
+          <Button variant="ghost" onClick={() => window.print()}><Printer size={16} /> Print / PDF</Button>
+        </div>
+      </div>
+
+      <div className="grid-stats" style={{ marginBottom: 22 }}>
+        <StatCard tone="neutral" icon={Library}  eyebrow="Collection" value={collectionSize.toLocaleString()} label="Books in catalog" />
+        <StatCard tone="active"  icon={BookCopy} eyebrow="Lending"    value={totalBorrows.toLocaleString()}  label="Total borrows" />
+        <StatCard tone={rateIsHealthy ? "active" : "critical"} icon={Percent} eyebrow="Overdue" value={`${overdueRate?.rate ?? 0}%`} label="Overdue rate" />
+        <StatCard tone="neutral" icon={Library}  eyebrow="Popular"    value={topGenre?.genre || "—"} label="Top genre" />
+      </div>
 
       <div className="detail-grid" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "stretch" }}>
         <Card title="Collection by Genre">
@@ -135,6 +184,12 @@ export default function ReportsPage() {
 
       <div style={{ marginTop: 22 }}>
         <Card title="Borrowing Trends">
+          <div className="row row--between" style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+            <span className="page-sub" style={{ margin: 0 }}>Monthly loans over time.</span>
+            <div style={{ width: 180 }}>
+              <Select value={range} onChange={(e) => setRange(e.target.value)} options={RANGE_OPTIONS} />
+            </div>
+          </div>
           <LineChart data={trendData} xKey="label" yKey="count" />
         </Card>
       </div>

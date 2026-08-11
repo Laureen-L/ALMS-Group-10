@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import LineChart from "../../components/charts/LineChart.jsx";
 import { getLibrarianDashboard } from "../../services/adminService.js";
 import { getBooks, deleteBook } from "../../services/bookService.js";
-import { getTrendsReport, sendOverdueReminders } from "../../services/reportService.js";
+import { getTrendsReport, getOverdueTrend, sendOverdueReminders } from "../../services/reportService.js";
 import EditBookModal from "../../components/books/EditBookModal.jsx";
 import { useToast } from "../../context/ToastContext.jsx";
 
@@ -36,6 +36,7 @@ export default function LibrarianDashboardPage() {
   const [error, setError] = useState(null);
   const [removing, setRemoving] = useState(null);
   const [trends, setTrends] = useState([]);
+  const [overdueTrend, setOverdueTrend] = useState([]);
   const [editing, setEditing] = useState(null);
   const [remindingId, setRemindingId] = useState(null);
   const toast = useToast();
@@ -44,12 +45,13 @@ export default function LibrarianDashboardPage() {
     setLoading(true); setError(null);
     try {
       // Trends is supplementary — a failure there shouldn't blank the dashboard.
-      const [d, b, t] = await Promise.all([
+      const [d, b, t, ot] = await Promise.all([
         getLibrarianDashboard(),
         getBooks({ search: query }),
         getTrendsReport().catch(() => []),
+        getOverdueTrend().catch(() => []),
       ]);
-      setDash(d); setBooks(b); setTrends(t);
+      setDash(d); setBooks(b); setTrends(t); setOverdueTrend(ot);
     } catch (e) { setError(e); }
     finally { setLoading(false); }
   }
@@ -103,10 +105,18 @@ export default function LibrarianDashboardPage() {
         </div>
       )}
 
-      <div style={{ margin: "22px 0" }}>
+      <div className="detail-grid" style={{ gridTemplateColumns: "1fr 1fr", margin: "22px 0" }}>
         <Card title="Borrowing Trends">
           <LineChart
             data={trends.map((t) => ({ ...t, label: monthLabel(t.month) }))}
+            xKey="label"
+            yKey="count"
+            height={220}
+          />
+        </Card>
+        <Card title="Overdue Trends">
+          <LineChart
+            data={overdueTrend.map((t) => ({ ...t, label: monthLabel(t.month) }))}
             xKey="label"
             yKey="count"
             height={220}

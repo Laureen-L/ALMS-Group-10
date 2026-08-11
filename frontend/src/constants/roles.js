@@ -3,4 +3,5 @@ export const ROLES = {
   STUDENT: "student",
   LIBRARIAN: "librarian",
   ADMIN: "admin",
+  IT: "it",
 };
