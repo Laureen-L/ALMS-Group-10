@@ -5,26 +5,30 @@ import { api } from "./apiClient.js";
 
 function mapBook(b) {
   if (!b) return null;
+  // The books table tracks stock as available_quantity; `available` is just
+  // the boolean view of it that the older screens read.
+  const availableQuantity = b.available_quantity ?? (b.available === false ? 0 : 1);
   return {
     id: b.id,
     title: b.title,
     author: b.author,
     genre: b.genre,
-    publishedYear: b.published_year,
     createdAt: b.created_at,
-    // fields not in the current backend book model — safe defaults:
     isbn: b.isbn || null,
-    available: b.available !== undefined ? b.available : true,
+    availableQuantity,
+    available: availableQuantity > 0,
     qty: b.quantity !== undefined ? b.quantity : null,
   };
 }
 
 const MOCK_BOOKS = [
-  { id: 1, title: "The Pragmatic Programmer", author: "David Thomas", genre: "Computer Science", publishedYear: 1999, isbn: "978-0135957059", available: true, qty: 5 },
-  { id: 2, title: "Clean Code", author: "Robert C. Martin", genre: "Software Engineering", publishedYear: 2008, isbn: "978-0132350884", available: true, qty: 3 },
-  { id: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", genre: "Computer Science", publishedYear: 2009, isbn: "978-0262033848", available: false, qty: 0 },
-  { id: 4, title: "Design Patterns", author: "Erich Gamma", genre: "Software Engineering", publishedYear: 1994, isbn: "978-0201633610", available: true, qty: 2 },
-  { id: 5, title: "Refactoring", author: "Martin Fowler", genre: "Software Engineering", publishedYear: 1999, isbn: "978-0201485677", available: true, qty: 4 }
+  { id: 1, title: "The Pragmatic Programmer", author: "David Thomas", genre: "Computer Science", isbn: "978-0135957059", available: true, availableQuantity: 3, qty: 5 },
+  { id: 2, title: "Clean Code", author: "Robert C. Martin", genre: "Software Engineering", isbn: "978-0132350884", available: true, availableQuantity: 2, qty: 3 },
+  { id: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", genre: "Computer Science", isbn: "978-0262033848", available: false, availableQuantity: 0, qty: 3 },
+  { id: 4, title: "Design Patterns", author: "Erich Gamma", genre: "Software Engineering", isbn: "978-0201633610", available: true, availableQuantity: 1, qty: 2 },
+  { id: 5, title: "Refactoring", author: "Martin Fowler", genre: "Software Engineering", isbn: "978-0201485677", available: true, availableQuantity: 4, qty: 4 },
+  { id: 6, title: "Things Fall Apart", author: "Chinua Achebe", genre: "Fiction", isbn: "978-0385474542", available: true, availableQuantity: 6, qty: 6 },
+  { id: 7, title: "A Brief History of Time", author: "Stephen Hawking", genre: "Physics", isbn: "978-0553380163", available: true, availableQuantity: 2, qty: 2 }
 ];
 
 // GET /books?search=&genre=
@@ -49,6 +53,38 @@ export async function getBooks({ search = "", genre = "" } = {}) {
   return (Array.isArray(data) ? data : []).map(mapBook);
 }
 
+// GET /books/genres -> [{ genre, count }] sorted alphabetically.
+// Powers the genre browse grid on the student search screen.
+export async function getGenres() {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const counts = {};
+    MOCK_BOOKS.forEach((b) => { counts[b.genre] = (counts[b.genre] || 0) + 1; });
+    return Object.entries(counts)
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => a.genre.localeCompare(b.genre));
+  }
+  const data = await api.get("/books/genres");
+  return Array.isArray(data) ? data : [];
+}
+
+// GET /books/popular -> the 5 most-borrowed books, each with borrow_count.
+export async function getPopularBooks() {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return [
+      { ...MOCK_BOOKS[0], borrowCount: 142 },
+      { ...MOCK_BOOKS[1], borrowCount: 98 },
+      { ...MOCK_BOOKS[3], borrowCount: 75 },
+      { ...MOCK_BOOKS[5], borrowCount: 44 },
+      { ...MOCK_BOOKS[6], borrowCount: 31 },
+    ];
+  }
+  const data = await api.get("/books/popular");
+  return (Array.isArray(data) ? data : []).map((b) => ({
+    ...mapBook(b),
+    borrowCount: b.borrow_count ?? 0,
+  }));
+}
+
 // GET /books/:id
 export async function getBook(id) {
   if (import.meta.env.VITE_USE_MOCK !== "false") {
@@ -60,10 +96,15 @@ export async function getBook(id) {
 }
 
 // POST /books  (librarian/admin) -> { message, book }
-export async function createBook({ title, author, genre, publishedYear }) {
+// New stock starts fully available, so available_quantity mirrors quantity.
+export async function createBook({ title, author, isbn, genre, quantity = 1 }) {
   const res = await api.post("/books", {
-    title, author, genre,
-    published_year: publishedYear ? Number(publishedYear) : undefined,
+    title,
+    author,
+    genre,
+    isbn: isbn?.trim() ? isbn.trim() : null, // unique-when-present, so send null not ""
+    quantity: Number(quantity),
+    available_quantity: Number(quantity),
   });
   return mapBook(res.book);
 }

@@ -10,12 +10,15 @@ function mapRecord(r) {
   return {
     id: r.id,
     userId: r.user_id,
-    member: r.member_name || r.full_name || shortId(r.user_id),
+    member: r.users?.full_name || r.member_name || r.full_name || shortId(r.user_id),
+    memberEmail: r.users?.email || null,
     title: r.books?.title || "—",
     author: r.books?.author || "—",
     isbn: r.books?.isbn || null,
     borrowed: formatDate(r.borrow_date),
     due: formatDate(r.due_date),
+    // Raw date kept for "days overdue" arithmetic.
+    dueRaw: r.due_date || null,
     returned: formatDate(r.return_date),
     status: r.status,
   };
@@ -31,7 +34,7 @@ export async function getLibrarianDashboard() {
         { id: 2, userId: 2, member: "Ama Serwaa", title: "Clean Code", author: "Robert C. Martin", borrowed: "Oct 15, 2023", due: "Nov 15, 2023", status: "active" }
       ],
       overdueList: [
-        { id: 3, userId: 3, member: "Dr. Isaac Manu", title: "Introduction to Algorithms", author: "Thomas H. Cormen", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", status: "overdue" }
+        { id: 3, userId: 3, member: "Dr. Isaac Manu", title: "Introduction to Algorithms", author: "Thomas H. Cormen", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", dueRaw: new Date(Date.now() - 12 * 864e5).toISOString(), status: "overdue" }
       ],
     };
   }
@@ -48,9 +51,10 @@ export async function getLibrarianDashboard() {
 export async function getMembers() {
   if (import.meta.env.VITE_USE_MOCK !== "false") {
     return [
-      { id: 1, name: "Kwame Nkrumah", email: "student@knust.edu.gh", role: "student", joined: "Jan 12, 2023" },
-      { id: 2, name: "Ama Serwaa", email: "librarian@knust.edu.gh", role: "librarian", joined: "Feb 05, 2023" },
-      { id: 3, name: "Dr. Isaac Manu", email: "admin@knust.edu.gh", role: "admin", joined: "Mar 10, 2023" }
+      { id: 1, name: "Kwame Nkrumah", email: "student@knust.edu.gh", role: "student", isActive: true, joined: "Jan 12, 2023" },
+      { id: 2, name: "Ama Serwaa", email: "librarian@knust.edu.gh", role: "librarian", isActive: true, joined: "Feb 05, 2023" },
+      { id: 3, name: "Dr. Isaac Manu", email: "admin@knust.edu.gh", role: "admin", isActive: true, joined: "Mar 10, 2023" },
+      { id: 4, name: "Yaa Asantewaa", email: "yaa@knust.edu.gh", role: "student", isActive: false, joined: "Apr 02, 2023" }
     ];
   }
 
@@ -60,6 +64,8 @@ export async function getMembers() {
     name: m.full_name,
     email: m.email,
     role: m.role,
+    // Drives the Active/Deactivated badge and which action the edit modal offers.
+    isActive: m.is_active !== false,
     joined: formatDate(m.created_at),
   }));
 }
@@ -82,7 +88,7 @@ export async function getBorrowRecords() {
 export async function getOverdue() {
   if (import.meta.env.VITE_USE_MOCK !== "false") {
     return [
-      { id: 3, userId: 3, member: "Dr. Isaac Manu", title: "Introduction to Algorithms", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", status: "overdue" }
+      { id: 3, userId: 3, member: "Dr. Isaac Manu", title: "Introduction to Algorithms", borrowed: "Aug 01, 2023", due: "Sep 01, 2023", dueRaw: new Date(Date.now() - 12 * 864e5).toISOString(), status: "overdue" }
     ];
   }
 

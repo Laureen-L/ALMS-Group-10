@@ -349,6 +349,183 @@
   .meta-grid { grid-template-columns: repeat(2, 1fr); }
   .form-grid { grid-template-columns: 1fr; }
 }
+/* ---------- Genre browse (student search) ---------- */
+.genre-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.genre-card {
+  border: 1px solid var(--border-soft); border-radius: var(--radius);
+  padding: 22px 18px; box-shadow: var(--shadow-sm); cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+  text-align: left; width: 100%; font: inherit;
+}
+.genre-card:hover, .genre-card:focus-visible { transform: translateY(-2px); box-shadow: var(--shadow); }
+.genre-card__name { font-family: var(--font-display); font-weight: 600; font-size: 17px; color: var(--green-900); margin: 0; }
+.genre-card__count { font-size: 13px; color: var(--muted); margin: 6px 0 0; }
+@media (max-width: 1100px) { .genre-grid { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 820px)  { .genre-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 520px)  { .genre-grid { grid-template-columns: 1fr; } }
+
+/* ---------- Borrow limit meter (dashboard + my borrowings) ---------- */
+.borrow-limit { border-radius: var(--radius); padding: 16px 18px; border: 1px solid var(--border-soft); }
+.borrow-limit--ok { background: var(--green-100); }
+.borrow-limit--full { background: var(--red-100); }
+.borrow-limit h3 { margin: 0; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); }
+.borrow-limit__count { font-family: var(--font-display); font-weight: 700; font-size: 24px; color: var(--green-900); margin: 6px 0 0; }
+.borrow-limit--full .borrow-limit__count { color: var(--red-600); }
+.borrow-limit__warn { color: var(--red-600); font-weight: 700; font-size: 13px; margin: 8px 0 0; }
+
+/* ---------- Circulation desk (librarian) ---------- */
+.circulation-form { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.circulation-form__field { flex: 1 1 220px; }
+.circ-message { border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 16px; font-weight: 600; }
+.circ-message--ok { background: var(--green-100); color: var(--green-900); }
+.circ-message--err { background: var(--red-100); color: var(--red-600); }
+
+/* ============================================================
+   Motion
+   Everything here is wrapped by the reduced-motion block at the
+   end of this section — respect the OS setting, don't override it.
+   ============================================================ */
+
+@keyframes alms-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes alms-toast-in {
+  from { opacity: 0; transform: translateX(16px) scale(.98); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes alms-modal-in {
+  from { opacity: 0; transform: translateY(8px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes alms-shimmer {
+  from { background-position: -420px 0; }
+  to   { background-position: 420px 0; }
+}
+@keyframes alms-spin { to { transform: rotate(360deg); } }
+
+/* Page content eases in on route change. */
+.shell__content > * { animation: alms-fade-up .28s ease both; }
+
+/* Staggered entrance for grids, so cards arrive in sequence rather than
+   all at once. Capped — beyond ~8 the delay becomes noticeable lag. */
+.book-grid > *, .genre-grid > *, .grid-stats > * { animation: alms-fade-up .3s ease both; }
+.book-grid > *:nth-child(2), .genre-grid > *:nth-child(2), .grid-stats > *:nth-child(2) { animation-delay: .04s; }
+.book-grid > *:nth-child(3), .genre-grid > *:nth-child(3), .grid-stats > *:nth-child(3) { animation-delay: .08s; }
+.book-grid > *:nth-child(4), .genre-grid > *:nth-child(4), .grid-stats > *:nth-child(4) { animation-delay: .12s; }
+.book-grid > *:nth-child(5), .genre-grid > *:nth-child(5) { animation-delay: .16s; }
+.book-grid > *:nth-child(n+6), .genre-grid > *:nth-child(n+6) { animation-delay: .2s; }
+
+/* Cards lift on hover. transform only — cheap to composite. */
+.book-card { transition: transform .16s ease, box-shadow .16s ease, border-color .16s ease; }
+.book-card[role="button"]:hover,
+.book-card[role="button"]:focus-visible { transform: translateY(-3px); box-shadow: var(--shadow); }
+
+.btn { transition: transform .12s ease, background .16s ease, opacity .16s ease, box-shadow .16s ease; }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.table tbody tr { transition: background .14s ease; }
+.table tbody tr:hover { background: var(--cream); }
+
+.sidebar__link { transition: background .14s ease, color .14s ease; }
+
+.modal { animation: alms-modal-in .2s ease both; }
+.modal__overlay { animation: alms-fade-up .16s ease both; }
+
+/* Keyboard focus must stay visible everywhere. */
+.btn:focus-visible, .genre-card:focus-visible, .book-card:focus-visible,
+.stat-card--clickable:focus-visible, .act-edit:focus-visible, .link-btn:focus-visible {
+  outline: 2px solid var(--green-600);
+  outline-offset: 2px;
+}
+
+/* ---------- Toasts ---------- */
+.toast-stack {
+  position: fixed; top: 18px; right: 18px; z-index: 1000;
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: min(380px, calc(100vw - 36px));
+}
+.toast {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 4px solid var(--muted);
+  border-radius: var(--radius); padding: 12px 14px;
+  box-shadow: var(--shadow); animation: alms-toast-in .22s ease both;
+}
+.toast--success { border-left-color: var(--green-600); }
+.toast--error   { border-left-color: var(--red-600); }
+.toast--info    { border-left-color: var(--gold-500); }
+.toast--success .toast__icon { color: var(--green-600); }
+.toast--error   .toast__icon { color: var(--red-600); }
+.toast--info    .toast__icon { color: var(--gold-600); }
+.toast__icon { flex-shrink: 0; margin-top: 1px; }
+.toast__msg { flex: 1; font-size: 14px; color: var(--ink); line-height: 1.4; }
+.toast__close {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  padding: 0; flex-shrink: 0; line-height: 1;
+}
+.toast__close:hover { color: var(--ink); }
+@media (max-width: 520px) {
+  .toast-stack { top: auto; bottom: 16px; left: 16px; right: 16px; max-width: none; }
+}
+
+/* ---------- Skeleton loaders ---------- */
+.skeleton {
+  background: linear-gradient(90deg, var(--border-soft) 25%, var(--cream-dark) 50%, var(--border-soft) 75%);
+  background-size: 840px 100%;
+  animation: alms-shimmer 1.3s linear infinite;
+  border-radius: var(--radius-sm);
+}
+.skeleton-row { height: 14px; margin-bottom: 12px; }
+.skeleton-card { height: 118px; border-radius: var(--radius); }
+
+/* ---------- Inline button spinner ---------- */
+.btn__spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  animation: alms-spin .7s linear infinite;
+  display: inline-block; flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shell__content > *, .book-grid > *, .genre-grid > *, .grid-stats > *,
+  .toast, .modal, .modal__overlay, .skeleton {
+    animation: none !important;
+  }
+  .book-card[role="button"]:hover, .btn:active:not(:disabled) { transform: none; }
+  * { transition-duration: .01ms !important; }
+}
+
+/* ---------- Donut chart + legend ---------- */
+.donut { display: flex; gap: 28px; align-items: center; flex-wrap: wrap; }
+.donut__legend { list-style: none; margin: 0; padding: 0; flex: 1 1 220px; min-width: 200px; }
+.donut__legend li { display: flex; align-items: center; gap: 10px; padding: 6px 0; font-size: 14px; }
+.donut__swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.donut__label { color: var(--ink); flex: 1; }
+.donut__value { color: var(--muted); font-size: 13px; white-space: nowrap; }
+
+/* ---------- Horizontal ranked bars (top books / borrowers) ---------- */
+.rank-row { display: grid; grid-template-columns: 1fr 46px; gap: 12px; align-items: center; margin-bottom: 12px; }
+.rank-row__label { font-size: 13px; color: var(--ink); margin-bottom: 4px; }
+.rank-row__track { background: var(--cream-dark); border-radius: var(--radius-pill); height: 10px; overflow: hidden; }
+.rank-row__fill { background: var(--green-600); height: 100%; border-radius: var(--radius-pill); }
+.rank-row__value { font-weight: 700; color: var(--green-900); font-size: 14px; text-align: right; }
+
+/* ---------- Big single-number report stat ---------- */
+.big-stat { text-align: center; padding: 12px 0; }
+.big-stat__value { font-family: var(--font-display); font-weight: 700; font-size: 44px; line-height: 1; color: var(--red-600); }
+.big-stat__value--ok { color: var(--green-700); }
+.big-stat__caption { color: var(--muted); margin-top: 8px; font-size: 14px; }
+
+/* ---------- Favorite toggle ---------- */
+.fav-btn--on { background: var(--gold-100); border-color: var(--gold-500); color: var(--gold-600); }
+
+/* ---------- Clickable stat card ---------- */
+.stat-card--clickable { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.stat-card--clickable:hover, .stat-card--clickable:focus-visible { transform: translateY(-2px); box-shadow: var(--shadow); }
+.stat-card__hint { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
 /* ---------- Librarian toolbar (search + filters + action) ---------- */
 .toolbar { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 18px; }
 .toolbar__search { flex: 2 1 260px; }

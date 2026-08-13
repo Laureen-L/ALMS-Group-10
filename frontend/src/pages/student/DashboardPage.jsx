@@ -1,21 +1,29 @@
-// SCREEN 1 — Student Dashboard. Real summary + loans + history + catalog.
+// SCREEN 1 — Student Dashboard. Summary + search hand-off + popular picks +
+// favorites + current loans and history.
+// The standalone catalog grid was removed — browsing lives on Search Books.
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { BookOpen, Bookmark, Bell, AlertCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Bookmark, Bell, AlertCircle, Search } from "lucide-react";
 import StatCard from "../../components/stats/StatCard.jsx";
 import Card from "../../components/ui/Card.jsx";
 import Button from "../../components/ui/Button.jsx";
-import Badge from "../../components/ui/Badge.jsx";
+import Input from "../../components/ui/Input.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
+import BorrowLimit from "../../components/books/BorrowLimit.jsx";
+import BookTile from "../../components/books/BookTile.jsx";
 import { getStudentDashboard } from "../../services/borrowService.js";
-import { getBooks } from "../../services/bookService.js";
+import { getPopularBooks } from "../../services/bookService.js";
+import { getFavorites } from "../../services/userService.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
-  const [data, setData] = useState({ active: [], history: [], summary: {} });
-  const [books, setBooks] = useState([]);
+  const navigate = useNavigate();
+  const [data, setData] = useState({ active: [], overdue: [], history: [], summary: {} });
+  const [popularBooks, setPopularBooks] = useState([]);
+  const [favorites, setFavorites] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -25,10 +33,17 @@ export default function StudentDashboardPage() {
       if (!user?.id) return;
       setLoading(true); setError(null);
       try {
-        const [dash, catalog] = await Promise.all([getStudentDashboard(user.id), getBooks()]);
+        // Popular picks and favorites are decoration — a failure there must not
+        // blank the loans table, so they settle independently.
+        const [dash, popular, favs] = await Promise.all([
+          getStudentDashboard(user.id),
+          getPopularBooks().catch(() => []),
+          getFavorites(user.id).catch(() => []),
+        ]);
         if (cancelled) return;
         setData(dash);
-        setBooks(catalog.slice(0, 3));
+        setPopularBooks(popular);
+        setFavorites(favs);
       } catch (e) { if (!cancelled) setError(e); }
       finally { if (!cancelled) setLoading(false); }
     }
@@ -36,7 +51,15 @@ export default function StudentDashboardPage() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  const openBook = (book) => navigate(`/student/catalog/${book.id}`);
+
+  function handleSearch(e) {
+    e.preventDefault();
+    navigate(`/student/search?search=${encodeURIComponent(searchQuery.trim())}`);
+  }
+
   const s = data.summary || {};
+  const activeLoans = (data.active?.length || 0) + (data.overdue?.length || 0);
 
   return (
     <div>
@@ -46,31 +69,68 @@ export default function StudentDashboardPage() {
         <StatCard tone="active"   icon={Bookmark}    eyebrow="Active"   value={String(s.totalActive ?? 0)}   label="Books Borrowed" />
         <StatCard tone="warning"  icon={Bell}        eyebrow="Total"    value={String(s.totalBorrowed ?? 0)} label="Total Borrowed" />
         <StatCard tone="critical" icon={AlertCircle} eyebrow="Overdue"  value={String(s.totalOverdue ?? 0)}  label="Overdue Books" />
-        <StatCard tone="neutral"  icon={BookOpen}    eyebrow="Limit"    value="5" label="Books Allowed" />
+        <BorrowLimit activeLoans={activeLoans} />
       </div>
 
-      <h2 className="page-title" style={{ margin: "26px 0 14px" }}>Library Catalog</h2>
-      {loading ? (
-        <div className="state"><div className="state__spinner" />Loading…</div>
-      ) : (
-        <div className="book-grid">
-          {books.map((b) => (
-            <div key={b.id} className="book-card">
-              <div className="book-card__cover"><BookOpen size={22} /></div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <Badge tone="green">{b.genre || "Book"}</Badge>
-                <Link to={`/student/catalog/${b.id}`} className="book-card__title" style={{ marginTop: 8 }}>{b.title}</Link>
-                <div className="book-card__author">By {b.author}</div>
-                <div style={{ marginTop: "auto" }}>
-                  <Link to={`/student/catalog/${b.id}`}><Button variant="gold" size="sm">View</Button></Link>
-                </div>
-              </div>
+      <div style={{ marginTop: 26 }}>
+        <Card title="Find a book">
+          <form className="row" style={{ gap: 12, alignItems: "flex-end" }} onSubmit={handleSearch}>
+            <div style={{ flex: "1 1 260px" }}>
+              <Input
+                label="Search the library"
+                placeholder="Search by title or author…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
             </div>
-          ))}
-        </div>
-      )}
+            <Button type="submit" variant="gold"><Search size={16} /> Search</Button>
+          </form>
+        </Card>
+      </div>
 
       <div style={{ marginTop: 26 }}>
+        <Card title="Popular Picks">
+          {popularBooks.length === 0 ? (
+            <div className="state">Nothing borrowed yet — popular titles will appear here.</div>
+          ) : (
+            <div className="book-grid">
+              {popularBooks.map((b) => (
+                <BookTile
+                  key={b.id}
+                  book={b}
+                  onOpen={openBook}
+                  footer={<span style={{ color: "var(--muted)" }}>{b.borrowCount} borrows</span>}
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 22 }}>
+        <Card title="My Favorites">
+          {favorites.length === 0 ? (
+            <div className="state">No favorites yet — browse books and tap ☆ to save them.</div>
+          ) : (
+            <div className="book-grid">
+              {favorites.map((b) => (
+                <BookTile
+                  key={b.id}
+                  book={b}
+                  onOpen={openBook}
+                  footer={
+                    b.availableQuantity > 0
+                      ? <span style={{ color: "var(--green-700)", fontWeight: 600 }}>{b.availableQuantity} available</span>
+                      : <span style={{ color: "var(--red-600)", fontWeight: 600 }}>Not available</span>
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      <div style={{ marginTop: 22 }}>
         <Card title="Current Borrowings">
           <DataTable
             loading={loading} error={error}
