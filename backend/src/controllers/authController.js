@@ -285,11 +285,25 @@ const getProfile = async (req, res) => {
       return res.status(403).json({ success: false, message: "You can only view your own profile." });
     }
 
-    const { data: profile, error } = await supabase
+    const BASE_COLUMNS = 'id, full_name, email, phone, role, is_active, created_at';
+
+    let { data: profile, error } = await supabase
       .from('users')
-      .select('id, full_name, email, phone, role, is_active, created_at')
+      .select(`${BASE_COLUMNS}, preferences`)
       .eq('id', id)
       .single();
+
+    // `preferences` arrives with the governance migration. Asking for a column
+    // that does not exist is an error, not an empty field, so on a database
+    // where that migration has not run this would 404 every profile in the
+    // app. Fall back to the columns that have always been there.
+    if (error?.code === '42703') {
+      ({ data: profile, error } = await supabase
+        .from('users')
+        .select(BASE_COLUMNS)
+        .eq('id', id)
+        .single());
+    }
 
     if (profile) return res.status(200).json({ success: true, user: profile });
 
@@ -319,7 +333,7 @@ const getProfile = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { id } = req.params;
-    const { full_name, name, phone } = req.body;
+    const { full_name, name, phone, preferences } = req.body;
     const fullName = full_name ?? name;
 
     // Members edit only their own profile; admins may edit anyone's.
@@ -332,6 +346,23 @@ const updateProfile = async (req, res) => {
     if (fullName !== undefined) patch.full_name = fullName;
     if (phone !== undefined) patch.phone = phone;
 
+    // Notification and display toggles from the Settings screen. Merged over
+    // what is stored rather than replacing it, so a screen that only knows
+    // about three of the five toggles cannot silently discard the other two.
+    if (preferences !== undefined) {
+      if (typeof preferences !== 'object' || Array.isArray(preferences) || preferences === null) {
+        return res.status(400).json({ success: false, message: 'preferences must be an object.' });
+      }
+
+      const { data: current } = await supabase
+        .from('users')
+        .select('preferences')
+        .eq('id', id)
+        .maybeSingle();
+
+      patch.preferences = { ...(current?.preferences || {}), ...preferences };
+    }
+
     if (Object.keys(patch).length === 0) {
       return res.status(400).json({ success: false, message: "Nothing to update." });
     }
@@ -343,9 +374,17 @@ const updateProfile = async (req, res) => {
       .select('id, full_name, email, phone, role, is_active')
       .single();
 
-    if (error) return res.status(400).json({ success: false, message: error.message });
+    if (error) {
+      if (error.code === '42703' && patch.preferences) {
+        return res.status(503).json({
+          success: false,
+          message: 'Preferences cannot be saved yet. Run the governance migration first.',
+        });
+      }
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
-    return res.status(200).json({ success: true, user: data });
+    return res.status(200).json({ success: true, user: { ...data, preferences: patch.preferences } });
   } catch (err) {
     return res.status(500).json({ success: false, message: "Internal Server Error", error: err.message });
   }

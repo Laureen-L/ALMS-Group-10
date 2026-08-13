@@ -77,6 +77,23 @@ export async function returnBook(borrowId) {
   return res.borrow;
 }
 
+// POST /renew { borrowId } -> { message, borrow, renewalsLeft }
+//
+// Nothing could extend a loan before this: a book ran its 14 days and then
+// went overdue. A member may renew their own; staff may renew anyone's. The
+// backend refuses a loan that is already overdue.
+export async function renewLoan(borrowId) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const loan = mockDashboardData.active.find((b) => b.id === borrowId);
+    if (!loan) throw new Error("Only an active loan can be renewed.");
+    const newDue = new Date(Date.now() + 7 * 864e5);
+    loan.dueRaw = newDue.toISOString();
+    loan.due = formatDate(newDue);
+    return { message: `Renewed until ${loan.due}.`, renewalsLeft: 1 };
+  }
+  return api.post("/renew", { borrowId });
+}
+
 // --- Circulation desk (librarian, scans an ISBN rather than picking a book id) ---
 
 // POST /borrow { isbn, memberEmail }

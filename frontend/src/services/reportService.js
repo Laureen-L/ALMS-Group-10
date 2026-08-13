@@ -68,13 +68,26 @@ export async function getTopBorrowers() {
   return Array.isArray(data) ? data : [];
 }
 
-// POST /admin/send-overdue-reminders -> { remindersSent, skipped, failed }
-// Pass a loanId to remind one member; omit it to text everyone overdue.
+// POST /admin/send-overdue-reminders
+//   -> { totalOverdue, notified, alreadyNotified, remindersSent,
+//        smsConfigured, skipped, failed, notifyFailed }
+// Pass a loanId to remind one member; omit it to remind everyone overdue.
+//
+// Two channels: every overdue member gets an in-app notification, and those
+// with a usable phone number are also texted when Termii is configured.
+// The mock leaves smsConfigured false, which is the state the app is actually
+// in until the Termii sender ID is approved.
 export async function sendOverdueReminders(loanId) {
   if (USE_MOCK()) {
     return loanId
-      ? { success: true, totalOverdue: 1, remindersSent: 1, skipped: [], failed: [] }
-      : { success: true, totalOverdue: 3, remindersSent: 2, skipped: [{ reason: "No phone number on file" }], failed: [] };
+      ? {
+          success: true, totalOverdue: 1, notified: 1, alreadyNotified: 0,
+          remindersSent: 0, smsConfigured: false, skipped: [], failed: [], notifyFailed: [],
+        }
+      : {
+          success: true, totalOverdue: 3, notified: 3, alreadyNotified: 0,
+          remindersSent: 0, smsConfigured: false, skipped: [], failed: [], notifyFailed: [],
+        };
   }
   return api.post("/admin/send-overdue-reminders", loanId ? { loanId } : undefined);
 }

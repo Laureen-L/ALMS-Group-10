@@ -96,6 +96,81 @@ export async function getOverdue() {
   return (data || []).map(mapRecord);
 }
 
+// GET /admin/members/:id (staff)
+//
+// The member list answered none of the questions asked at a circulation desk.
+// This is the screen that does: what they hold, how much of their allowance is
+// used, what is late, what they owe.
+export async function getMemberDetail(memberId) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return {
+      member: {
+        id: memberId, full_name: "Kwame Nkrumah", email: "student@knust.edu.gh",
+        phone: "0244000000", role: "student", is_active: true, created_at: "2023-01-12",
+      },
+      openLoans: [
+        { id: "l1", due_date: new Date(Date.now() + 5 * 864e5).toISOString(), status: "active",
+          renewal_count: 0, books: { id: 1, title: "The Pragmatic Programmer", author: "David Thomas", isbn: "9780135957059" } },
+        { id: "l2", due_date: new Date(Date.now() - 6 * 864e5).toISOString(), status: "overdue",
+          renewal_count: 2, books: { id: 3, title: "Introduction to Algorithms", author: "Thomas H. Cormen", isbn: "9780262033848" } },
+      ],
+      history: [
+        { id: "l3", borrow_date: "2026-03-05", return_date: "2026-03-20", status: "returned",
+          books: { id: 5, title: "Refactoring", author: "Martin Fowler" } },
+      ],
+      fines: [{ id: "f1", amount: 4.5, status: "unpaid", issued_at: "2026-08-02", notes: "9 day(s) late" }],
+      summary: {
+        openLoans: 2, overdueLoans: 1, borrowLimit: 5, atLimit: false,
+        totalBorrowed: 3, outstandingFines: 4.5,
+      },
+    };
+  }
+
+  const d = await api.get(`/admin/members/${memberId}`);
+  return {
+    member: d.member,
+    openLoans: d.openLoans || [],
+    history: d.history || [],
+    fines: d.fines || [],
+    summary: d.summary || {},
+  };
+}
+
+// POST /admin/members/invite (admin)
+//
+// The only route to a librarian account used to be: sign up as a student, then
+// get promoted. Sends an invitation rather than setting a password — an
+// administrator should never handle someone else's credentials.
+export async function inviteMember({ email, fullName, role = "librarian" }) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { success: true, message: `Invitation sent to ${email}.`, user: { email, full_name: fullName, role } };
+  }
+  return api.post("/admin/members/invite", { email, full_name: fullName, role });
+}
+
+// GET /admin/due-soon?days= (staff)
+//
+// The preventive counterpart to /admin/overdue: loans about to fall due, so
+// the desk can call these members before it becomes a fine.
+export async function getDueSoon(days) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return {
+      days: days ?? 3,
+      records: [
+        { id: 5, userId: 1, member: "Kwame Nkrumah", memberEmail: "student@knust.edu.gh", phone: "0244000000",
+          title: "Clean Code", due: "Tomorrow", dueRaw: new Date(Date.now() + 864e5).toISOString(), status: "active" },
+      ],
+    };
+  }
+
+  const qs = days ? `?days=${days}` : "";
+  const d = await api.get(`/admin/due-soon${qs}`);
+  return {
+    days: d.days,
+    records: (d.records || []).map((r) => ({ ...mapRecord(r), phone: r.users?.phone || null })),
+  };
+}
+
 // GET /admin/stats
 export async function getAdminStats() {
   if (import.meta.env.VITE_USE_MOCK !== "false") {

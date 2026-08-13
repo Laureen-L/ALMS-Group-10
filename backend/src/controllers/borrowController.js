@@ -1,5 +1,8 @@
 const supabase = require('../config/supabaseClient');
 const { normalizeIsbn } = require('../utils/isbn');
+const { getSettings } = require('./settingsController');
+const { issueFineForLoan } = require('./fineController');
+const { logAudit, AUDIT_ACTIONS, ENTITY_TYPES } = require('../utils/audit');
 
 /*
  * Schema (see prisma/schema.prisma):
@@ -21,8 +24,13 @@ const { normalizeIsbn } = require('../utils/isbn');
  * updates have been removed; the trigger is the single source of truth.
  */
 
-const MAX_ACTIVE_BORROWS = 5;
-const LOAN_PERIOD_DAYS = 14;
+/*
+ * The borrow limit and loan period used to be the two constants below. They
+ * now come from system_settings via getSettings(), so an administrator changes
+ * library policy from the Settings screen instead of editing this file and
+ * redeploying. getSettings() returns exactly these numbers as its defaults, so
+ * behaviour is unchanged on a database where the migration has not been run.
+ */
 const STAFF_ROLES = ['admin', 'librarian'];
 
 // Loans that still count against a member's allowance.
@@ -37,7 +45,7 @@ const resolveBook = async ({ isbn, bookId }) => {
     return { error: { status: 400, message: 'Provide either isbn or bookId' } };
   }
 
-  const query = supabase.from('books').select('id, title, isbn, available_quantity');
+  const query = supabase.from('books').select('id, title, isbn, available_quantity, withdrawn_at');
   // Scanners and typists produce hyphenated ISBNs; the column stores the bare
   // form. Without normalising, an exact match here reports "Book not found"
   // for a book that is sitting in the catalogue.
@@ -100,6 +108,16 @@ const borrowBook = async (req, res) => {
     }
     const { book } = resolved;
 
+    // A withdrawn title keeps its copies and its history, so the stock check
+    // below would happily lend one out. Withdrawal has to bite here.
+    if (book.withdrawn_at) {
+      return res.status(400).json({
+        error: `“${book.title}” has been withdrawn from circulation and cannot be borrowed.`,
+      });
+    }
+
+    const settings = await getSettings();
+
     // FR-09: count this member's open loans
     const { count: activeBorrowCount, error: countError } = await supabase
       .from('borrow_records')
@@ -109,9 +127,9 @@ const borrowBook = async (req, res) => {
 
     if (countError) throw countError;
 
-    if (activeBorrowCount >= MAX_ACTIVE_BORROWS) {
+    if (activeBorrowCount >= settings.max_active_borrows) {
       return res.status(400).json({
-        error: `Borrow limit reached. A member cannot have more than ${MAX_ACTIVE_BORROWS} books out at once.`,
+        error: `Borrow limit reached. A member cannot have more than ${settings.max_active_borrows} books out at once.`,
       });
     }
 
@@ -137,7 +155,7 @@ const borrowBook = async (req, res) => {
     // columns, so send plain YYYY-MM-DD rather than a full timestamp.
     const borrowDate = new Date();
     const dueDate = new Date(borrowDate);
-    dueDate.setDate(dueDate.getDate() + LOAN_PERIOD_DAYS);
+    dueDate.setDate(dueDate.getDate() + settings.loan_period_days);
     const asDate = (d) => d.toISOString().slice(0, 10);
 
     const { data: borrowRecord, error: insertError } = await supabase
@@ -251,10 +269,19 @@ const returnBook = async (req, res) => {
 
     if (updateBorrowError) throw updateBorrowError;
 
+    // Charge for a late return. issueFineForLoan never throws and never
+    // rejects: the book is already back and the loan is already closed, so a
+    // problem writing the fine must not turn a successful return into a 500
+    // that tells the member their return failed.
+    const fine = await issueFineForLoan(updatedBorrow, { title: updatedBorrow.books?.title });
+
     return res.status(200).json({
       success: true,
-      message: 'Book returned successfully',
+      message: fine.issued
+        ? `Book returned. A late fine of GHS ${fine.amount.toFixed(2)} was issued (${fine.days} day(s) overdue).`
+        : 'Book returned successfully',
       borrow: updatedBorrow,
+      fine: fine.issued ? { amount: fine.amount, days: fine.days } : null,
     });
   } catch (err) {
     console.error('returnBook error:', err);
@@ -262,7 +289,123 @@ const returnBook = async (req, res) => {
   }
 };
 
+/**
+ * POST /api/renew
+ * Body: { borrowId }
+ *
+ * Extends an open loan by system_settings.renewal_period_days.
+ *
+ * Nothing in the system could previously extend a loan: a book ran its 14 days
+ * and then went overdue, and the only way to avoid that was to walk it back to
+ * the desk. A member may renew their own loan; staff may renew anyone's.
+ *
+ * Refused on an overdue loan. A renewal is a favour granted before the
+ * deadline, not a way to erase one that has already passed — allowing it would
+ * also mean a member could dodge the fine issued on return.
+ */
+const renewLoan = async (req, res) => {
+  try {
+    const { borrowId } = req.body || {};
+    const isStaff = STAFF_ROLES.includes(req.user.role);
+
+    if (!borrowId) return res.status(400).json({ error: 'Provide borrowId' });
+
+    const { data: loan, error: readError } = await supabase
+      .from('borrow_records')
+      .select('*, books(title, author)')
+      .eq('id', borrowId)
+      .maybeSingle();
+
+    if (readError) return res.status(400).json({ error: readError.message });
+    if (!loan) return res.status(404).json({ error: 'Borrow record not found' });
+
+    if (!isStaff && loan.user_id !== req.user.id) {
+      return res.status(403).json({ error: 'This borrow record does not belong to you' });
+    }
+    if (loan.status === 'returned') {
+      return res.status(400).json({ error: 'This book has already been returned.' });
+    }
+
+    const settings = await getSettings();
+    const today = new Date().toISOString().slice(0, 10);
+
+    // due_date is NOT NULL in the schema, so this should be unreachable — but
+    // the alternative to checking is writing a wrong date. `new Date(null)` is
+    // 1970-01-01, not Invalid Date, so a missing value would sail past both the
+    // overdue check below (which compares the string "null") and the
+    // arithmetic, and quietly set the loan due in 1970.
+    if (!loan.due_date) {
+      return res.status(409).json({ error: 'This loan has no due date and cannot be renewed.' });
+    }
+
+    const dueDate = String(loan.due_date).slice(0, 10);
+
+    // Check the date as well as the status: 'overdue' is only stamped by the
+    // nightly job, so a loan can be days past due and still read 'active'.
+    if (loan.status === 'overdue' || dueDate < today) {
+      return res.status(400).json({
+        error: 'This loan is already overdue and cannot be renewed. Please return the book.',
+      });
+    }
+
+    const used = loan.renewal_count || 0;
+    if (used >= settings.max_renewals) {
+      return res.status(400).json({
+        error: settings.max_renewals === 0
+          ? 'Renewals are not allowed under current library policy.'
+          : `This loan has already been renewed ${used} time(s), the maximum allowed.`,
+      });
+    }
+
+    // Extended from the current due date, not from today. Renewing early would
+    // otherwise shorten the loan, which is the opposite of what was asked for.
+    const newDue = new Date(loan.due_date);
+    newDue.setDate(newDue.getDate() + settings.renewal_period_days);
+
+    const { data, error } = await supabase
+      .from('borrow_records')
+      .update({ due_date: newDue.toISOString().slice(0, 10), renewal_count: used + 1 })
+      .eq('id', borrowId)
+      .select('*, books(title, author, isbn)')
+      .maybeSingle();
+
+    if (error) {
+      if (error.code === '42703') {
+        return res.status(503).json({
+          error: 'Renewals are not set up yet. Run the governance migration first.',
+        });
+      }
+      return res.status(400).json({ error: error.message });
+    }
+
+    await logAudit(req, {
+      action: AUDIT_ACTIONS.LOAN_RENEWED,
+      entityType: ENTITY_TYPES.LOAN,
+      entityId: borrowId,
+      entityLabel: loan.books?.title || 'loan',
+      details: {
+        from: dueDate,
+        to: data.due_date,
+        renewalNumber: used + 1,
+        of: settings.max_renewals,
+        byStaff: isStaff && loan.user_id !== req.user.id,
+      },
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: `Renewed until ${data.due_date}. ${settings.max_renewals - (used + 1)} renewal(s) left.`,
+      borrow: data,
+      renewalsLeft: settings.max_renewals - (used + 1),
+    });
+  } catch (err) {
+    console.error('renewLoan error:', err);
+    return res.status(500).json({ error: 'Something went wrong while renewing the loan' });
+  }
+};
+
 module.exports = {
   borrowBook,
   returnBook,
+  renewLoan,
 };

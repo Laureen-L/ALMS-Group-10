@@ -7,12 +7,18 @@ import { Search, LogOut, Menu } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.jsx";
 import { useDebounce } from "../../hooks/useDebounce.js";
 import Avatar from "../ui/Avatar.jsx";
+import NotificationBell from "./NotificationBell.jsx";
 
 // Where a search from the topbar lands, per role.
+//
+// Admins used to be sent to borrow records, because that was the closest thing
+// to a searchable list they had — the field said "Search catalog…" and then
+// searched loans. They have a catalog of their own now, so both staff roles go
+// to the thing the placeholder actually names.
 const SEARCH_TARGET = {
   student: "/student/search",
   librarian: "/librarian/catalog",
-  admin: "/admin/borrow-records",
+  admin: "/admin/catalog",
 };
 
 export default function TopBar({ searchPlaceholder = "Search catalog…", onMenu }) {
@@ -78,6 +84,7 @@ export default function TopBar({ searchPlaceholder = "Search catalog…", onMenu
         />
       </form>
       <div className="topbar__user">
+        <NotificationBell />
         <div className="topbar__who">
           <div className="topbar__name">{user ? `Welcome, ${user.name}` : "Welcome"}</div>
           {/* Derived from the signed-in role — never hardcoded, so a librarian

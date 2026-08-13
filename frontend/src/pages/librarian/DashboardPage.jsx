@@ -1,22 +1,30 @@
-// SCREEN 5 — Librarian Dashboard. Real stats + tabs (catalog / activity / overdue).
+// Librarian Dashboard — the day's work at a glance.
+//
+// This used to carry three tabs — Book Catalog, Borrowing Activity, Overdue
+// Management — each a full table that also existed as its own sidebar screen.
+// The catalog appeared twice, activity twice, and overdue three times. A
+// dashboard that duplicates half the app is impossible to navigate and
+// impossible to demo.
+//
+// It now does what a dashboard should: the numbers, the trend, and short
+// "needs attention" lists that hand off to the screen that owns each job.
 import { useState, useEffect } from "react";
-import { BookOpen, ClipboardCheck, AlertTriangle, Plus, Pencil, Trash2, Send } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import {
+  BookOpen, ClipboardCheck, AlertTriangle, CalendarClock, Coins, Boxes,
+  ArrowRight, Plus, ArrowLeftRight,
+} from "lucide-react";
 import StatCard from "../../components/stats/StatCard.jsx";
 import AlertBanner from "../../components/ui/AlertBanner.jsx";
 import Button from "../../components/ui/Button.jsx";
-import Input from "../../components/ui/Input.jsx";
 import Card from "../../components/ui/Card.jsx";
-import Tabs from "../../components/ui/Tabs.jsx";
-import Modal from "../../components/ui/Modal.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
-import { useNavigate } from "react-router-dom";
 import LineChart from "../../components/charts/LineChart.jsx";
-import { getLibrarianDashboard } from "../../services/adminService.js";
-import { getBooks, deleteBook } from "../../services/bookService.js";
-import { getTrendsReport, sendOverdueReminders } from "../../services/reportService.js";
-import EditBookModal from "../../components/books/EditBookModal.jsx";
-import { useToast } from "../../context/ToastContext.jsx";
+import { getLibrarianDashboard, getDueSoon } from "../../services/adminService.js";
+import { getLowStock } from "../../services/bookService.js";
+import { getFines, formatMoney } from "../../services/fineService.js";
+import { getTrendsReport } from "../../services/reportService.js";
 
 // Turn "2026-07" into "Jul 26" for the trends axis.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,80 +34,116 @@ function monthLabel(iso) {
   return name ? `${name} ${year.slice(2)}` : iso;
 }
 
+// How many rows a preview panel shows before it stops being a summary and
+// starts being the screen it links to.
+const PREVIEW_ROWS = 5;
+
 export default function LibrarianDashboardPage() {
   const navigate = useNavigate();
-  const [tab, setTab] = useState("catalog");
+
   const [dash, setDash] = useState({ stats: {}, recentActivity: [], overdueList: [] });
-  const [books, setBooks] = useState([]);
-  const [query, setQuery] = useState("");
+  const [trends, setTrends] = useState([]);
+  const [dueSoon, setDueSoon] = useState([]);
+  const [lowStock, setLowStock] = useState([]);
+  const [finesOwed, setFinesOwed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [removing, setRemoving] = useState(null);
-  const [trends, setTrends] = useState([]);
-  const [editing, setEditing] = useState(null);
-  const [remindingId, setRemindingId] = useState(null);
-  const toast = useToast();
 
-  async function load() {
-    setLoading(true); setError(null);
-    try {
-      // Trends is supplementary — a failure there shouldn't blank the dashboard.
-      const [d, b, t] = await Promise.all([
-        getLibrarianDashboard(),
-        getBooks({ search: query }),
-        getTrendsReport().catch(() => []),
-      ]);
-      setDash(d); setBooks(b); setTrends(t);
-    } catch (e) { setError(e); }
-    finally { setLoading(false); }
-  }
-  useEffect(() => { load(); }, []);
-
-  async function remind(loan) {
-    setRemindingId(loan.id);
-    try {
-      const res = await sendOverdueReminders(loan.id);
-      if (res.remindersSent > 0) toast.success(`Reminder sent to ${loan.member}.`);
-      else if (res.skipped?.length) toast.info(`${loan.member} has no phone number on file.`);
-      else toast.error(res.failed?.[0]?.reason || "Reminder could not be sent.");
-    } catch (e) {
-      toast.error(e.message || "Reminder could not be sent.");
-    } finally {
-      setRemindingId(null);
-    }
-  }
-
-  async function confirmRemove() {
-    const title = removing.title;
-    try {
-      await deleteBook(removing.id);
-      setRemoving(null);
-      toast.success(`Removed “${title}” from the catalog.`);
-      load();
-    } catch (e) {
-      setRemoving(null);
-      toast.error(e.message || "Could not remove that book.");
-    }
-  }
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true); setError(null);
+      try {
+        // Only the first call is load-bearing. The rest feed individual panels,
+        // so a failure there shows one empty panel rather than blanking the
+        // whole dashboard.
+        const [d, t, ds, ls, f] = await Promise.all([
+          getLibrarianDashboard(),
+          getTrendsReport().catch(() => []),
+          getDueSoon().catch(() => ({ records: [] })),
+          getLowStock().catch(() => ({ books: [] })),
+          getFines({ status: "unpaid" }).catch(() => ({ totals: {} })),
+        ]);
+        if (cancelled) return;
+        setDash(d);
+        setTrends(t);
+        setDueSoon(ds.records || []);
+        setLowStock(ls.books || []);
+        setFinesOwed(f.totals?.unpaid || 0);
+      } catch (e) {
+        if (!cancelled) setError(e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const stats = dash.stats || {};
+  const overdueCount = stats.overdueLoans ?? 0;
 
   return (
     <div>
-      <h1 className="page-title">Dashboard</h1>
-      <p className="page-sub">Manage the catalog, loans, and overdue books.</p>
-
-      <div className="grid-stats">
-        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog"  value={String(stats.totalBooks ?? 0)}   label="Total Books" />
-        <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active"  value={String(stats.activeLoans ?? 0)}  label="Active Loans" />
-        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"   value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/librarian/overdue-loans")} />
-        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Live"     value={String(books.length)} label="Books Listed" />
+      <div className="row row--between" style={{ flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-sub">What needs attention today.</p>
+        </div>
+        <div className="row" style={{ gap: 8, flexWrap: "wrap" }}>
+          <Button variant="green" onClick={() => navigate("/librarian/circulation")}>
+            <ArrowLeftRight size={16} /> Circulation Desk
+          </Button>
+          <Button variant="ghost" onClick={() => navigate("/librarian/books/new")}>
+            <Plus size={16} /> Add Book
+          </Button>
+        </div>
       </div>
 
-      {(stats.overdueLoans ?? 0) > 0 && (
+      {/* Every card is the way into the screen that owns that number. */}
+      <div className="grid-stats" style={{ marginTop: 18 }}>
+        <StatCard
+          tone="neutral" icon={BookOpen} eyebrow="Catalog"
+          value={String(stats.totalBooks ?? 0)} label="Total Books"
+          onClick={() => navigate("/librarian/catalog")}
+        />
+        <StatCard
+          tone="active" icon={ClipboardCheck} eyebrow="Active"
+          value={String(stats.activeLoans ?? 0)} label="Active Loans"
+          onClick={() => navigate("/librarian/activity")}
+        />
+        <StatCard
+          tone={overdueCount > 0 ? "critical" : "neutral"} icon={AlertTriangle} eyebrow="Action"
+          value={String(overdueCount)} label="Overdue Loans"
+          onClick={() => navigate("/librarian/overdue")}
+        />
+        <StatCard
+          tone={dueSoon.length > 0 ? "warning" : "neutral"} icon={CalendarClock} eyebrow="Coming up"
+          value={String(dueSoon.length)} label="Due Soon"
+          onClick={() => navigate("/librarian/due-soon")}
+        />
+        <StatCard
+          tone={lowStock.length > 0 ? "warning" : "neutral"} icon={Boxes} eyebrow="Stock"
+          value={String(lowStock.length)} label="Low Stock Titles"
+          onClick={() => navigate("/librarian/inventory")}
+        />
+        <StatCard
+          tone={finesOwed > 0 ? "warning" : "neutral"} icon={Coins} eyebrow="Owed"
+          value={formatMoney(finesOwed)} label="Outstanding Fines"
+          onClick={() => navigate("/librarian/fines")}
+        />
+      </div>
+
+      {overdueCount > 0 && (
         <div style={{ margin: "22px 0" }}>
-          <AlertBanner tone="danger" message={`You have ${stats.overdueLoans} overdue loans that require action.`}
-            action={<Button variant="outline" style={{ background: "#fff" }} onClick={() => setTab("overdue")}>View Overdue</Button>} />
+          <AlertBanner
+            tone="danger"
+            message={`${overdueCount} overdue loan${overdueCount === 1 ? "" : "s"} need chasing.`}
+            action={
+              <Button variant="outline" style={{ background: "#fff" }} onClick={() => navigate("/librarian/overdue")}>
+                Work the overdue list
+              </Button>
+            }
+          />
         </div>
       )}
 
@@ -114,96 +158,53 @@ export default function LibrarianDashboardPage() {
         </Card>
       </div>
 
-      <Card>
-        <Tabs active={tab} onChange={setTab} tabs={[
-          { id: "catalog", label: "Book Catalog" },
-          { id: "activity", label: "Borrowing Activity" },
-          { id: "overdue", label: "Overdue Management" },
-        ]} />
+      {/* Previews, not the screens themselves. Each stops at five rows and
+          hands off to the page that can actually act on them. */}
+      <div style={{ marginBottom: 22 }}>
+        <Card
+          title="Falling due next"
+          action={
+            <button className="link-btn row" style={{ gap: 4 }} onClick={() => navigate("/librarian/due-soon")}>
+              All due soon <ArrowRight size={14} />
+            </button>
+          }
+        >
+          <DataTable
+            loading={loading} error={error}
+            columns={[
+              { key: "member", header: "Member" },
+              { key: "title", header: "Book" },
+              { key: "due", header: "Due" },
+            ]}
+            rows={dueSoon.slice(0, PREVIEW_ROWS)}
+            onRowClick={(r) => r.userId && navigate(`/librarian/members/${r.userId}`)}
+            emptyMessage="Nothing due in the next few days."
+          />
+        </Card>
+      </div>
 
-        <div style={{ marginTop: 18 }}>
-          {tab === "catalog" && (
-            <>
-              <div className="toolbar">
-                <div className="toolbar__search">
-                  <Input placeholder="Search by title…" value={query} onChange={(e) => setQuery(e.target.value)} />
-                </div>
-                <Button variant="ghost" onClick={load}>Search</Button>
-                <Button variant="green" onClick={() => navigate("/librarian/books/new")}><Plus size={16} /> Add New Book</Button>
-              </div>
-              <DataTable
-                loading={loading} error={error}
-                columns={[
-                  { key: "title", header: "Title" },
-                  { key: "author", header: "Author" },
-                  { key: "genre", header: "Genre" },
-                  { key: "isbn", header: "ISBN" },
-                  { key: "actions", header: "Actions", render: (r) => (
-                    <span className="actions-cell">
-                      <button className="act-edit" onClick={() => setEditing(r)}><Pencil size={14} /> Edit</button>
-                      <button className="act-remove" onClick={() => setRemoving(r)}><Trash2 size={14} /> Remove</button>
-                    </span>
-                  ) },
-                ]}
-                rows={books}
-                emptyMessage="No books in the catalog yet."
-              />
-            </>
-          )}
-
-          {tab === "activity" && (
-            <DataTable
-              loading={loading} error={error}
-              columns={[
-                { key: "member", header: "Member" },
-                { key: "title", header: "Book Title" },
-                { key: "borrowed", header: "Borrow Date" },
-                { key: "due", header: "Due Date" },
-                { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
-              ]}
-              rows={dash.recentActivity}
-              emptyMessage="No recent activity."
-            />
-          )}
-
-          {tab === "overdue" && (
-            <DataTable
-              loading={loading} error={error}
-              columns={[
-                { key: "member", header: "Member" },
-                { key: "title", header: "Book Title" },
-                { key: "due", header: "Due Date" },
-                { key: "status", header: "Status", render: () => <StatusBadge status="overdue" /> },
-                { key: "actions", header: "Action", render: (r) => (
-                  <button className="act-edit" disabled={remindingId === r.id} onClick={() => remind(r)}>
-                    <Send size={14} /> {remindingId === r.id ? "Sending…" : "Remind"}
-                  </button>
-                ) },
-              ]}
-              rows={dash.overdueList}
-              emptyMessage="Nothing overdue."
-            />
-          )}
-        </div>
-      </Card>
-
-      {editing && (
-        <EditBookModal
-          book={editing}
-          onClose={() => setEditing(null)}
-          onSaved={(saved) => {
-            setBooks((prev) => prev.map((b) => (b.id === saved.id ? saved : b)));
-            toast.success(`Saved “${saved.title}”.`);
-          }}
+      <Card
+        title="Recent activity"
+        action={
+          <button className="link-btn row" style={{ gap: 4 }} onClick={() => navigate("/librarian/activity")}>
+            All records <ArrowRight size={14} />
+          </button>
+        }
+      >
+        <DataTable
+          loading={loading} error={error}
+          columns={[
+            { key: "member", header: "Member" },
+            { key: "title", header: "Book Title" },
+            { key: "borrowed", header: "Borrowed" },
+            { key: "due", header: "Due" },
+            { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
+          ]}
+          rows={(dash.recentActivity || []).slice(0, PREVIEW_ROWS)}
+          onRowClick={(r) => r.userId && navigate(`/librarian/members/${r.userId}`)}
+          emptyMessage="No recent activity."
         />
-      )}
-
-      {removing && (
-        <Modal title="Remove this book?" onClose={() => setRemoving(null)}
-          footer={<><Button variant="ghost" onClick={() => setRemoving(null)}>Cancel</Button><Button variant="danger" onClick={confirmRemove}>Remove book</Button></>}>
-          <p>Remove <strong>{removing.title}</strong> from the catalog? This can’t be undone.</p>
-        </Modal>
-      )}
+      </Card>
     </div>
   );
 }

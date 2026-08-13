@@ -84,6 +84,12 @@ model users {
   /// FALSE disables login without physically deleting records.
   is_active     Boolean   @default(true)
 
+  /// Notification and display preferences set on the Settings screen.
+  /// JSONB rather than one column per toggle: these are UI preferences
+  /// that keep changing and are never queried or joined on, so a new
+  /// toggle should not need a migration.
+  preferences   Json      @default("{}") @db.JsonB
+
   created_at    DateTime  @default(now()) @db.Timestamptz()
 
   /// Maintained by trigger trg_users_updated_at.
@@ -107,6 +113,18 @@ model users {
 
   /// Books this user has saved to their favorites.
   favorites        favorites[]      @relation("FavoriteUser")
+
+  /// In-app notices addressed to this user (overdue reminders, etc.).
+  notifications    notifications[]  @relation("NotificationUser")
+
+  /// Governance actions this user performed (role changes, deletions).
+  audit_entries    audit_log[]      @relation("AuditActor")
+
+  /// Books this user withdrew from circulation.
+  books_withdrawn  books[]          @relation("BookWithdrawnBy")
+
+  /// Policy changes this user made. At most one row points here.
+  settings_updated system_settings[] @relation("SettingsUpdatedBy")
 
   // ------------------------------------------------------------------
   // INDEXES (Data Dictionary §2.1)
@@ -154,6 +172,17 @@ model books {
   /// SET NULL when the staff account is deleted — book record is preserved.
   added_by String? @db.Uuid
 
+  /// Soft removal from circulation. NULL means the title is live.
+  ///
+  /// Exists so librarians never need DELETE on a catalogue row:
+  /// borrow_records references books with onDelete: Restrict, so a real
+  /// delete either fails on any title that was ever borrowed, or destroys
+  /// the loan history the library is meant to keep.
+  withdrawn_at DateTime? @db.Timestamptz()
+
+  /// Staff member who withdrew it.
+  withdrawn_by String? @db.Uuid
+
   created_at DateTime @default(now()) @db.Timestamptz()
 
   /// Maintained by trigger trg_books_updated_at.
@@ -163,7 +192,8 @@ model books {
   // RELATIONS
   // ------------------------------------------------------------------
 
-  added_by_user  users?           @relation("BookAddedBy", fields: [added_by], references: [id], onDelete: SetNull)
+  added_by_user     users?        @relation("BookAddedBy", fields: [added_by], references: [id], onDelete: SetNull)
+  withdrawn_by_user users?        @relation("BookWithdrawnBy", fields: [withdrawn_by], references: [id], onDelete: SetNull)
   borrow_records borrow_records[]
 
   /// Members who have saved this book to their favorites.
@@ -221,6 +251,11 @@ model borrow_records {
   /// Optional librarian notes at time of borrowing or return.
   notes String? @db.Text
 
+  /// Extensions granted on this loan, checked against
+  /// system_settings.max_renewals. Every existing loan starts at 0,
+  /// which is correct — none of them has ever been renewed.
+  renewal_count Int @default(0) @db.SmallInt
+
   created_at DateTime @default(now()) @db.Timestamptz()
 
   /// Maintained by trigger trg_borrow_updated_at.
@@ -236,6 +271,9 @@ model borrow_records {
 
   /// One fine record may exist per overdue loan (FR-18).
   fine fines?
+
+  /// In-app notices raised about this loan (e.g. overdue reminders).
+  notifications notifications[]
 
   // ------------------------------------------------------------------
   // INDEXES (Data Dictionary §2.3)
@@ -277,6 +315,58 @@ model favorites {
   // ------------------------------------------------------------------
   @@unique([user_id, book_id], name: "favorites_user_id_book_id_key") // one row per member/book
   @@index([user_id], name: "idx_favorites_user_id")                   // list a member's favorites
+}
+
+// =============================================================
+// TABLE: notifications
+// In-app notices delivered inside ALMS itself.
+//
+// Overdue reminders were SMS-only, which made the whole feature
+// depend on a Termii API key and an approved sender ID. This table
+// is the channel that always works: nothing external is involved,
+// so a member is still told their book is late when SMS is not
+// available, and SMS becomes an addition rather than the only path.
+// =============================================================
+
+model notifications {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// The member the notice is addressed to.
+  /// CASCADE delete — a notice is a pointer, not a record to preserve.
+  user_id String @db.Uuid
+
+  /// Headline shown in the notification list.
+  title String @db.VarChar(150)
+
+  /// Full message text. Mirrors the SMS wording where both are sent.
+  body String @db.Text
+
+  /// What produced this notice ('overdue_reminder', 'general', …).
+  /// VARCHAR rather than an ENUM so a new kind needs no ALTER TYPE.
+  type String @default("general") @db.VarChar(30)
+
+  /// The loan this notice concerns, when there is one.
+  /// SET NULL — the notice still happened even if the loan record goes.
+  borrow_id String? @db.Uuid
+
+  /// NULL while unread. Doubles as the unread flag, so there is no
+  /// separate boolean that could drift out of step with the timestamp.
+  read_at DateTime? @db.Timestamptz()
+
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  user          users           @relation("NotificationUser", fields: [user_id], references: [id], onDelete: Cascade)
+  borrow_record borrow_records? @relation(fields: [borrow_id], references: [id], onDelete: SetNull)
+
+  // ------------------------------------------------------------------
+  // INDEXES
+  // ------------------------------------------------------------------
+  @@index([user_id, created_at], name: "idx_notifications_user_created") // the inbox, newest first
+  @@index([user_id],             name: "idx_notifications_unread")       // partial (read_at IS NULL) in SQL — unread badge
 }
 
 // =============================================================
@@ -328,4 +418,122 @@ model fines {
   // ------------------------------------------------------------------
   @@index([user_id], name: "idx_fines_user_id") // All fines for a member (FR-18)
   @@index([status],  name: "idx_fines_status")  // Filters unpaid fines for reporting
+}
+
+// =============================================================
+// TABLE: system_settings
+//
+// Library policy, held in the database rather than in code.
+//
+// The loan period (14 days) and the borrow limit (5) were constants
+// in borrowController.js, so changing library policy meant editing
+// source and redeploying. An administrator sets them here instead.
+//
+// A singleton: the CHECK constraint on the primary key in SQL means
+// there can only ever be one row, so the backend reads it with
+// .eq('id', 1) and never has to decide which row is the live one.
+// =============================================================
+
+model system_settings {
+  /// Always 1. CHECK ("id" = 1) in SQL enforces the singleton.
+  id Int @id @default(1) @db.SmallInt
+
+  /// FR-12: how long a new loan runs.
+  loan_period_days Int @default(14) @db.SmallInt
+
+  /// FR-09: how many books one member may hold at once.
+  max_active_borrows Int @default(5) @db.SmallInt
+
+  /// How many times a member may extend one loan, and by how long.
+  max_renewals Int @default(2) @db.SmallInt
+  renewal_period_days Int @default(7) @db.SmallInt
+
+  /// Fine accrual, in GHS per day late. Matches fines.amount scale.
+  fine_per_day Decimal @default(0.50) @db.Decimal(8, 2)
+
+  /// Days past the due date before a fine starts accruing.
+  fine_grace_days Int @default(0) @db.SmallInt
+
+  /// How far ahead the "due soon" desk queue looks.
+  due_soon_days Int @default(3) @db.SmallInt
+
+  /// Below this many available copies, a title shows on low stock.
+  low_stock_threshold Int @default(2) @db.SmallInt
+
+  /// Who last changed policy. audit_log carries the full history;
+  /// this is the quick answer for the settings screen.
+  /// SET NULL — policy outlives the administrator who set it.
+  updated_by String? @db.Uuid
+
+  updated_at DateTime @default(now()) @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  updated_by_user users? @relation("SettingsUpdatedBy", fields: [updated_by], references: [id], onDelete: SetNull)
+}
+
+// =============================================================
+// TABLE: audit_log
+//
+// Who did what, to what, and when.
+//
+// Role promotions, deactivations and catalogue deletions previously
+// left no trace of an actor — borrow_records.processed_by was the
+// only accountability in the system. This is the record that
+// separates an administrator from a librarian.
+//
+// Append-only. Nothing in the application updates or deletes a row:
+// a corrected mistake is a second entry, not an edited one.
+// =============================================================
+
+model audit_log {
+  id String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+
+  /// Who did it. SET NULL on delete, because the entry must outlive
+  /// the actor — "nobody did this" is a worse answer than "an account
+  /// that no longer exists did this".
+  actor_id String? @db.Uuid
+
+  /// Denormalised copies captured at write time. actor_id goes NULL
+  /// when an account is removed, and a log that then reads "someone
+  /// changed a role" is worthless. These are what keep the entry
+  /// legible years later.
+  actor_email String? @db.VarChar(100)
+  actor_role  String? @db.VarChar(20)
+
+  /// Dotted verb: 'member.role_changed', 'book.deleted',
+  /// 'settings.updated', 'fine.waived'. VARCHAR rather than an ENUM
+  /// so a new action never needs an ALTER TYPE, which Postgres
+  /// cannot run inside a transaction.
+  action String @db.VarChar(60)
+
+  /// What it was done to: 'user' | 'book' | 'loan' | 'fine' | 'settings'.
+  entity_type String  @db.VarChar(40)
+  entity_id   String? @db.Uuid
+
+  /// Human-readable name of the target, also captured at write time:
+  /// a deleted book's title is the only thing that makes its deletion
+  /// entry mean anything.
+  entity_label String? @db.VarChar(255)
+
+  /// Before/after values, free-form per action. JSONB rather than
+  /// columns because every action carries different fields.
+  details Json? @db.JsonB
+
+  created_at DateTime @default(now()) @db.Timestamptz()
+
+  // ------------------------------------------------------------------
+  // RELATIONS
+  // ------------------------------------------------------------------
+
+  actor users? @relation("AuditActor", fields: [actor_id], references: [id], onDelete: SetNull)
+
+  // ------------------------------------------------------------------
+  // INDEXES
+  // ------------------------------------------------------------------
+  @@index([created_at],                       name: "idx_audit_log_created") // the whole log, newest first
+  @@index([actor_id, created_at],             name: "idx_audit_log_actor")   // one administrator's actions
+  @@index([entity_type, entity_id, created_at], name: "idx_audit_log_entity") // one book's / one member's history
 }

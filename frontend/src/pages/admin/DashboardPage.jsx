@@ -1,7 +1,7 @@
 // SCREEN 4 — Admin Dashboard. Real stats + monthly chart + members + records.
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { BookOpen, Users, ClipboardCheck, AlertTriangle } from "lucide-react";
+import { BookOpen, Users, ClipboardCheck, AlertTriangle, ArrowRight } from "lucide-react";
 import StatCard from "../../components/stats/StatCard.jsx";
 import Card from "../../components/ui/Card.jsx";
 import Badge from "../../components/ui/Badge.jsx";
@@ -39,11 +39,13 @@ export default function AdminDashboardPage() {
       <h1 className="page-title">System Overview</h1>
       <p className="page-sub">Real-time statistics for the KNUST library.</p>
 
+      {/* Every card leads somewhere. "Total Books" was a dead number until
+          admins got a catalog route of their own. */}
       <div className="grid-stats">
-        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog" value={String(stats.totalBooks ?? 0)}   label="Total Books" />
-        <StatCard tone="active"   icon={Users}         eyebrow="People"  value={String(stats.totalMembers ?? 0)} label="Total Members" />
-        <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active" value={String(stats.activeLoans ?? 0)}  label="Active Loans" />
-        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"  value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/admin/overdue-loans")} />
+        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog" value={String(stats.totalBooks ?? 0)}   label="Total Books"   onClick={() => navigate("/admin/catalog")} />
+        <StatCard tone="active"   icon={Users}         eyebrow="People"  value={String(stats.totalMembers ?? 0)} label="Total Members" onClick={() => navigate("/admin/users")} />
+        <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active" value={String(stats.activeLoans ?? 0)}  label="Active Loans"  onClick={() => navigate("/admin/borrow-records")} />
+        <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"  value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/admin/overdue")} />
       </div>
 
       <div style={{ marginTop: 22 }}>
@@ -53,7 +55,14 @@ export default function AdminDashboardPage() {
       </div>
 
       <div style={{ marginTop: 22 }}>
-        <Card title="Members">
+        <Card
+          title="Newest members"
+          action={
+            <button className="link-btn row" style={{ gap: 4 }} onClick={() => navigate("/admin/users")}>
+              Manage users <ArrowRight size={14} />
+            </button>
+          }
+        >
           <DataTable
             loading={loading} error={error}
             columns={[
@@ -63,13 +72,21 @@ export default function AdminDashboardPage() {
               { key: "joined", header: "Join Date" },
             ]}
             rows={members}
+            onRowClick={(r) => navigate(`/admin/members/${r.id}`)}
             emptyMessage="No members yet."
           />
         </Card>
       </div>
 
       <div style={{ marginTop: 22 }}>
-        <Card title="Recent Borrow Records">
+        <Card
+          title="Recent Borrow Records"
+          action={
+            <button className="link-btn row" style={{ gap: 4 }} onClick={() => navigate("/admin/borrow-records")}>
+              All records <ArrowRight size={14} />
+            </button>
+          }
+        >
           <DataTable
             loading={loading} error={error}
             columns={[
@@ -80,6 +97,7 @@ export default function AdminDashboardPage() {
               { key: "status", header: "Status", render: (r) => <StatusBadge status={r.status} /> },
             ]}
             rows={records}
+            onRowClick={(r) => r.userId && navigate(`/admin/members/${r.userId}`)}
             emptyMessage="No borrow records yet."
           />
         </Card>

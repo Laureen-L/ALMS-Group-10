@@ -1,6 +1,18 @@
 const supabase = require('../config/supabaseClient');
+const { getSettings } = require('./settingsController');
+const { logAudit, AUDIT_ACTIONS, ENTITY_TYPES } = require('../utils/audit');
 
 const STAFF_ROLES = ['admin', 'librarian'];
+
+// Where Supabase sends an invited member of staff to set their password.
+// Must also be listed under Authentication > URL Configuration > Redirect URLs
+// in the Supabase dashboard, or Supabase falls back to Site URL and the invite
+// link arrives without its token.
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+
+// Loans that still count against a member's allowance. Mirrors the list in
+// borrowController — a loan is "open" in both places for the same reason.
+const OPEN_STATUSES = ['active', 'overdue'];
 
 /**
  * GET /api/student/dashboard/:id
@@ -142,6 +154,191 @@ const getMembers = async (req, res) => {
 };
 
 /**
+ * GET /api/admin/members/:id
+ *
+ * Everything a librarian needs about one member while they are standing at the
+ * desk: what they hold now, how much of their allowance is used, what is late,
+ * what they owe, and what they have borrowed before.
+ *
+ * The member list gave name, email, role and join date and nothing else, which
+ * answered none of the questions actually asked at a circulation desk. Staff
+ * only — a member reads their own equivalent from the student dashboard.
+ */
+const getMemberDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: member, error: memberError } = await supabase
+      .from('users')
+      .select('id, full_name, email, phone, role, is_active, created_at')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (memberError) return res.status(400).json({ error: memberError.message });
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    // Fired together: the desk is waiting on all four, and running them in
+    // series makes the screen visibly slower for no benefit.
+    const [loansResult, historyResult, finesResult, settings] = await Promise.all([
+      supabase
+        .from('borrow_records')
+        .select('*, books(id, title, author, isbn)')
+        .eq('user_id', id)
+        .in('status', OPEN_STATUSES)
+        .order('due_date', { ascending: true }),
+      supabase
+        .from('borrow_records')
+        .select('*, books(id, title, author, isbn)')
+        .eq('user_id', id)
+        .eq('status', 'returned')
+        .order('return_date', { ascending: false })
+        .limit(25),
+      supabase
+        .from('fines')
+        .select('id, amount, status, issued_at, notes, borrow_id')
+        .eq('user_id', id)
+        .order('issued_at', { ascending: false }),
+      getSettings(),
+    ]);
+
+    if (loansResult.error) throw loansResult.error;
+    if (historyResult.error) throw historyResult.error;
+
+    const openLoans = loansResult.data || [];
+    const history = historyResult.data || [];
+
+    // A missing fines table is not an error here. The rest of the screen is
+    // still worth showing, and getFines() reports the same condition properly.
+    const fines = finesResult.error ? [] : finesResult.data || [];
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // 'overdue' is only stamped by the nightly job, so a loan can be past due
+    // while still marked 'active'. Compare dates as well, or the desk is told
+    // a member is clear when they are not.
+    const overdueCount = openLoans.filter(
+      (l) => l.status === 'overdue' || (l.due_date && String(l.due_date).slice(0, 10) < today)
+    ).length;
+
+    const outstanding = Number(
+      fines
+        .filter((f) => f.status === 'unpaid')
+        .reduce((sum, f) => sum + (Number(f.amount) || 0), 0)
+        .toFixed(2)
+    );
+
+    return res.status(200).json({
+      member,
+      openLoans,
+      history,
+      fines,
+      summary: {
+        openLoans: openLoans.length,
+        overdueLoans: overdueCount,
+        borrowLimit: settings.max_active_borrows,
+        // What the desk actually wants to know before scanning a book:
+        // can this person take another one out?
+        atLimit: openLoans.length >= settings.max_active_borrows,
+        totalBorrowed: openLoans.length + history.length,
+        outstandingFines: outstanding,
+      },
+    });
+  } catch (err) {
+    console.error('getMemberDetail error:', err);
+    return res.status(500).json({ error: 'Failed to fetch member details' });
+  }
+};
+
+/**
+ * POST /api/admin/members/invite
+ * Body: { email, full_name, role }
+ * Admin only.
+ *
+ * The only route to a librarian account was: the person signs up as a student,
+ * then an administrator finds them and promotes them. This creates the account
+ * with the right role from the start.
+ *
+ * Sends an invitation rather than setting a password. An administrator should
+ * never choose, see, or transmit someone else's credentials — Supabase emails
+ * a one-time link and the invitee sets their own on /reset-password.
+ */
+const inviteMember = async (req, res) => {
+  try {
+    const { email, full_name, name, role } = req.body || {};
+    const fullName = full_name || name;
+    const requestedRole = role || 'librarian';
+
+    if (!email || !fullName) {
+      return res.status(400).json({ error: 'Email and full name are required.' });
+    }
+    if (!VALID_ROLES.includes(requestedRole)) {
+      return res.status(400).json({ error: `Role must be one of: ${VALID_ROLES.join(', ')}` });
+    }
+
+    const { data: existing } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+
+    if (existing) {
+      return res.status(409).json({
+        error: 'Someone is already registered with that email. Change their role from the member list instead.',
+      });
+    }
+
+    const { data, error } = await supabase.auth.admin.inviteUserByEmail(email, {
+      // Carried into the auth record so resolveIdentity() reads the right role
+      // even on a deploy where public.users is unreadable under RLS.
+      data: { full_name: fullName, role: requestedRole },
+      redirectTo: `${FRONTEND_URL}/reset-password`,
+    });
+
+    if (error) {
+      if (/sending.*email|smtp/i.test(error.message)) {
+        return res.status(503).json({
+          error: 'Invitations are unavailable: the Supabase project cannot send email. Configure SMTP first.',
+        });
+      }
+      return res.status(400).json({ error: error.message });
+    }
+
+    // Mirror into public.users so they appear in the member list immediately,
+    // rather than only after they accept. Same reasoning as register().
+    const { error: profileError } = await supabase.from('users').insert({
+      id: data.user.id,
+      full_name: fullName,
+      email,
+      password_hash: 'managed_by_supabase_auth',
+      role: requestedRole,
+      is_active: true,
+    });
+
+    if (profileError) {
+      console.warn('inviteMember: could not mirror into public.users —', profileError.message);
+    }
+
+    await logAudit(req, {
+      action: AUDIT_ACTIONS.MEMBER_CREATED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: data.user.id,
+      entityLabel: fullName,
+      details: { email, role: requestedRole, method: 'invitation' },
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: `Invitation sent to ${email}.`,
+      profileMirrored: !profileError,
+      user: { id: data.user.id, email, full_name: fullName, role: requestedRole },
+    });
+  } catch (err) {
+    console.error('inviteMember error:', err);
+    return res.status(500).json({ error: 'Failed to send the invitation' });
+  }
+};
+
+/**
  * GET /api/admin/borrow-records
  * FR-17: all borrow records
  */
@@ -183,6 +380,48 @@ const getOverdueRecords = async (req, res) => {
   } catch (err) {
     console.error('getOverdueRecords error:', err);
     return res.status(500).json({ error: 'Failed to fetch overdue records' });
+  }
+};
+
+/**
+ * GET /api/admin/due-soon
+ * Query: ?days=<n> — defaults to system_settings.due_soon_days.
+ *
+ * Loans falling due inside the window, soonest first. The overdue screen is
+ * reactive — it lists books the library has already lost track of. This is the
+ * preventive counterpart: the desk can call these members before the loan
+ * turns into an overdue notice and a fine.
+ */
+const getDueSoon = async (req, res) => {
+  try {
+    const settings = await getSettings();
+    const requested = Number(req.query.days);
+    const days = Number.isInteger(requested) && requested > 0 && requested <= 60
+      ? requested
+      : settings.due_soon_days;
+
+    const today = new Date();
+    const horizon = new Date(today);
+    horizon.setDate(horizon.getDate() + days);
+
+    const asDate = (d) => d.toISOString().slice(0, 10);
+
+    const { data, error } = await supabase
+      .from('borrow_records')
+      .select('*, books(title, author, isbn), users!borrow_records_user_id_fkey(full_name, email, phone)')
+      // Still open, due from today up to the horizon. Anything already past
+      // due belongs on the overdue screen, not here — hence gte(today).
+      .in('status', OPEN_STATUSES)
+      .gte('due_date', asDate(today))
+      .lte('due_date', asDate(horizon))
+      .order('due_date', { ascending: true });
+
+    if (error) throw error;
+
+    return res.status(200).json({ days, records: data || [] });
+  } catch (err) {
+    console.error('getDueSoon error:', err);
+    return res.status(500).json({ error: 'Failed to fetch loans due soon' });
   }
 };
 
@@ -314,6 +553,14 @@ const updateMemberRole = async (req, res) => {
       return res.status(400).json({ error: 'You cannot change your own role' });
     }
 
+    // Read the old role before overwriting it: "student → librarian" is the
+    // line worth having in the audit log, and after the update it is gone.
+    const { data: before } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', id)
+      .maybeSingle();
+
     const { data, error } = await supabase
       .from('users')
       .update({ role })
@@ -323,6 +570,14 @@ const updateMemberRole = async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
+
+    await logAudit(req, {
+      action: AUDIT_ACTIONS.MEMBER_ROLE_CHANGED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: id,
+      entityLabel: data.full_name,
+      details: { email: data.email, from: before?.role || null, to: role },
+    });
 
     // Keep the auth record's copy of the role in step, or the metadata
     // fallback will keep granting the role this call just took away.
@@ -372,6 +627,14 @@ const deactivateMember = async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
 
+    await logAudit(req, {
+      action: AUDIT_ACTIONS.MEMBER_DEACTIVATED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: id,
+      entityLabel: data.full_name,
+      details: { email: data.email, role: data.role },
+    });
+
     const mirrored = await mirrorToAuthMetadata(id, { is_active: false });
 
     return res.status(200).json({ success: true, user: data, authMetadataMirrored: mirrored });
@@ -396,6 +659,14 @@ const reactivateMember = async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
+
+    await logAudit(req, {
+      action: AUDIT_ACTIONS.MEMBER_REACTIVATED,
+      entityType: ENTITY_TYPES.USER,
+      entityId: req.params.id,
+      entityLabel: data.full_name,
+      details: { email: data.email, role: data.role },
+    });
 
     const mirrored = await mirrorToAuthMetadata(req.params.id, { is_active: true });
 
@@ -551,8 +822,11 @@ module.exports = {
   getStudentDashboard,
   getLibrarianDashboard,
   getMembers,
+  getMemberDetail,
+  inviteMember,
   getBorrowRecords,
   getOverdueRecords,
+  getDueSoon,
   getAdminStats,
   updateMemberRole,
   deactivateMember,

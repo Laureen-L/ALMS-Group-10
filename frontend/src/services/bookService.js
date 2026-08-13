@@ -18,6 +18,11 @@ function mapBook(b) {
     availableQuantity,
     available: availableQuantity > 0,
     qty: b.quantity !== undefined ? b.quantity : null,
+    // Set when a librarian has taken the title out of circulation. Only the
+    // staff catalogue ever sees these — the member-facing list filters them
+    // out on the backend.
+    withdrawnAt: b.withdrawn_at || null,
+    inCirculation: !b.withdrawn_at,
   };
 }
 
@@ -55,8 +60,10 @@ const MOCK_BOOKS = [
   { id: 7, title: "A Brief History of Time", author: "Stephen Hawking", genre: "Physics", isbn: "978-0553380163", available: true, availableQuantity: 2, qty: 2 }
 ];
 
-// GET /books?search=&genre=
-export async function getBooks({ search = "", genre = "" } = {}) {
+// GET /books?search=&genre=&includeWithdrawn=
+// Staff screens pass includeWithdrawn so a librarian can find a withdrawn
+// title and put it back; members never see one.
+export async function getBooks({ search = "", genre = "", includeWithdrawn = false } = {}) {
   if (import.meta.env.VITE_USE_MOCK !== "false") {
     let results = [...MOCK_BOOKS];
     if (search) {
@@ -72,9 +79,29 @@ export async function getBooks({ search = "", genre = "" } = {}) {
   const params = new URLSearchParams();
   if (search) params.set("search", search);
   if (genre) params.set("genre", genre);
+  if (includeWithdrawn) params.set("includeWithdrawn", "true");
   const qs = params.toString();
   const data = await api.get(`/books${qs ? `?${qs}` : ""}`);
   return rankBooks((Array.isArray(data) ? data : []).map(mapBook), search);
+}
+
+// GET /books/low-stock?threshold= (staff) -> { threshold, books }
+// The reorder list. `onLoan` vs `outOfStock` separates "all copies are out"
+// (popular) from "we own none" (buy more), which have opposite fixes.
+export async function getLowStock(threshold) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const books = MOCK_BOOKS
+      .filter((b) => b.availableQuantity <= (threshold ?? 2))
+      .map((b) => ({ ...b, onLoan: b.qty - b.availableQuantity, outOfStock: b.availableQuantity === 0 }));
+    return { threshold: threshold ?? 2, books };
+  }
+
+  const qs = threshold !== undefined && threshold !== "" ? `?threshold=${threshold}` : "";
+  const data = await api.get(`/books/low-stock${qs}`);
+  return {
+    threshold: data.threshold,
+    books: (data.books || []).map((b) => ({ ...mapBook(b), onLoan: b.onLoan, outOfStock: b.outOfStock })),
+  };
 }
 
 // GET /books/genres -> [{ genre, count }] sorted alphabetically.
@@ -139,7 +166,59 @@ export async function updateBook(id, patch) {
   return mapBook(res.book);
 }
 
+// GET /books/:id/detail (staff) -> book + who's holding copies + history.
+// Members get GET /books/:id above, which carries neither.
+export async function getBookDetail(id) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    const book = MOCK_BOOKS.find((b) => String(b.id) === String(id)) || MOCK_BOOKS[0];
+    return {
+      book,
+      currentHolders: [
+        { id: "l1", due_date: new Date(Date.now() + 5 * 864e5).toISOString(), status: "active",
+          users: { id: 1, full_name: "Kwame Nkrumah", email: "student@knust.edu.gh", phone: "0244000000" } },
+      ],
+      history: [
+        { id: "l2", borrow_date: "2026-05-01", return_date: "2026-05-14", status: "returned",
+          users: { id: 2, full_name: "Ama Serwaa", email: "ama@knust.edu.gh" } },
+      ],
+      summary: { onLoan: 1, overdue: 0, timesBorrowed: 2, inCirculation: true },
+    };
+  }
+
+  const data = await api.get(`/books/${id}/detail`);
+  return { ...data, book: mapBook(data.book) };
+}
+
+// PUT /books/:id/withdraw (staff) -> takes a title out of circulation without
+// destroying the catalogue row, its loan history, or any fines against it.
+// This is what librarians use in place of delete.
+export async function withdrawBook(id, reason) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { message: "Title withdrawn from circulation.", copiesStillOnLoan: 0 };
+  }
+  return api.put(`/books/${id}/withdraw`, reason ? { reason } : undefined);
+}
+
+// PUT /books/:id/restore (staff)
+export async function restoreBook(id) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { message: "Title is back in circulation." };
+  }
+  return api.put(`/books/${id}/restore`);
+}
+
+// POST /books/import (staff) -> { importedCount, failedCount, imported, failed }
+// Rows are inserted one at a time on the backend, so a single bad row reports
+// itself by line number and the rest of the file still lands.
+export async function importBooks(books) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { success: true, importedCount: books.length, failedCount: 0, imported: books, failed: [] };
+  }
+  return api.post("/books/import", { books });
+}
+
 // DELETE /books/:id -> { message }
+// Admin only, and the backend still refuses any title that has loan history.
 export async function deleteBook(id) {
   return api.del(`/books/${id}`);
 }

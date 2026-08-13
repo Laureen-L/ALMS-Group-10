@@ -1,5 +1,11 @@
-// SCREEN 8 — Reports & Analytics. Five reports off /api/admin/reports/*.
+// Shared (librarian + admin) — reports off /api/admin/reports/*.
+//
+// Librarians can now reach this. They get the three operational reports —
+// trends, most-borrowed, overdue rate — because those are what decide what to
+// reorder and which loans to chase, and they had access to none of them.
+// Genre mix and top borrowers stay with admins; the backend guards match.
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { AlertTriangle, Send } from "lucide-react";
 import Card from "../../components/ui/Card.jsx";
 import Button from "../../components/ui/Button.jsx";
@@ -8,8 +14,9 @@ import LineChart from "../../components/charts/LineChart.jsx";
 import DataTable from "../../components/tables/DataTable.jsx";
 import {
   getGenreReport, getTrendsReport, getTopBooks,
-  getOverdueRate, getTopBorrowers, sendOverdueReminders,
+  getOverdueRate, getTopBorrowers,
 } from "../../services/reportService.js";
+import { usePortal } from "../../hooks/usePortal.js";
 
 // Turn "2026-07" into "Jul 2026" for the trends axis.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -41,6 +48,8 @@ function RankedBars({ items, labelOf, valueOf, emptyMessage }) {
 }
 
 export default function ReportsPage() {
+  const navigate = useNavigate();
+  const { base, isAdmin } = usePortal();
   const [genres, setGenres] = useState([]);
   const [trends, setTrends] = useState([]);
   const [topBooks, setTopBooks] = useState([]);
@@ -49,19 +58,24 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // SMS reminders
-  const [sending, setSending] = useState(false);
-  const [smsResult, setSmsResult] = useState(null); // { type, text }
-
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true); setError(null);
       try {
-        const [g, t, tb, rate, borrowers] = await Promise.all([
-          getGenreReport(), getTrendsReport(), getTopBooks(),
-          getOverdueRate(), getTopBorrowers(),
+        // Split by what the report is *for*, matching the guards on
+        // /admin/reports/*. Librarians get the operational three — they decide
+        // what to reorder and which loans to chase, and cannot do either
+        // without them. Genre mix is collection strategy, and top borrowers is
+        // a list of named people ranked by their reading habits; both stay
+        // with admins. Requesting them as a librarian would just 403.
+        const [t, tb, rate] = await Promise.all([
+          getTrendsReport(), getTopBooks(), getOverdueRate(),
         ]);
+        const [g, borrowers] = isAdmin
+          ? await Promise.all([getGenreReport(), getTopBorrowers()])
+          : [[], []];
+
         if (cancelled) return;
         setGenres(g); setTrends(t); setTopBooks(tb);
         setOverdueRate(rate); setTopBorrowers(borrowers);
@@ -69,27 +83,7 @@ export default function ReportsPage() {
       finally { if (!cancelled) setLoading(false); }
     })();
     return () => { cancelled = true; };
-  }, []);
-
-  async function onSendReminders() {
-    setSending(true);
-    setSmsResult(null);
-    try {
-      const res = await sendOverdueReminders();
-      const skipped = res.skipped?.length || 0;
-      const failed = res.failed?.length || 0;
-      setSmsResult({
-        type: failed > 0 ? "err" : "ok",
-        text: `${res.remindersSent} reminder(s) sent`
-          + (skipped ? `, ${skipped} skipped (no phone number)` : "")
-          + (failed ? `, ${failed} failed` : "") + ".",
-      });
-    } catch (e) {
-      setSmsResult({ type: "err", text: e.message || "Couldn’t send reminders." });
-    } finally {
-      setSending(false);
-    }
-  }
+  }, [isAdmin]);
 
   if (loading) return <div className="state"><div className="state__spinner" />Loading reports…</div>;
   if (error) return <div className="state">Couldn’t load reports. {error.message}</div>;
@@ -99,13 +93,20 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <h1 className="page-title">Library Reports</h1>
-      <p className="page-sub">Collection, lending and overdue analytics.</p>
+      <h1 className="page-title">{isAdmin ? "Library Reports" : "Collection Insights"}</h1>
+      <p className="page-sub">
+        {isAdmin
+          ? "Collection, lending and overdue analytics."
+          : "What's moving, what's late, and what to reorder."}
+      </p>
 
       <div className="detail-grid detail-grid--even" style={{ alignItems: "stretch" }}>
-        <Card title="Collection by Genre">
-          <DonutChart data={genres} labelKey="genre" valueKey="count" />
-        </Card>
+        {/* Genre mix is a collection-strategy question, not a desk one. */}
+        {isAdmin && (
+          <Card title="Collection by Genre">
+            <DonutChart data={genres} labelKey="genre" valueKey="count" />
+          </Card>
+        )}
 
         <Card title="Overdue Rate">
           {overdueRate && (
@@ -119,15 +120,15 @@ export default function ReportsPage() {
             </div>
           )}
 
+          {/* Sending reminders used to live here as well as on two other
+              screens. It belongs with the list of who is actually being
+              reminded, so this links there instead of being a third trigger. */}
           <div style={{ marginTop: 18, borderTop: "1px solid var(--border-soft)", paddingTop: 16 }}>
             <p className="page-sub" style={{ marginTop: 0 }}>
-              Text every member holding an overdue book.
+              Chase these on the overdue screen, where you can see who they are first.
             </p>
-            {smsResult && (
-              <p className={`circ-message circ-message--${smsResult.type}`}>{smsResult.text}</p>
-            )}
-            <Button variant="gold" onClick={onSendReminders} disabled={sending}>
-              <Send size={16} /> {sending ? "Sending…" : "Send Overdue Reminders"}
+            <Button variant="outline" onClick={() => navigate(`${base}/overdue`)}>
+              <Send size={16} /> Work the overdue list
             </Button>
           </div>
         </Card>
@@ -149,18 +150,22 @@ export default function ReportsPage() {
           />
         </Card>
 
-        <Card title="Top Borrowers">
-          <DataTable
-            columns={[
-              { key: "full_name", header: "Name" },
-              { key: "email", header: "Email" },
-              { key: "borrow_count", header: "Borrows" },
-            ]}
-            rows={topBorrowers}
-            rowKey="email"
-            emptyMessage="No borrowing activity yet."
-          />
-        </Card>
+        {/* A list of named people ranked by their reading habits. Admins only —
+            a librarian has no operational need for it. */}
+        {isAdmin && (
+          <Card title="Top Borrowers">
+            <DataTable
+              columns={[
+                { key: "full_name", header: "Name" },
+                { key: "email", header: "Email" },
+                { key: "borrow_count", header: "Borrows" },
+              ]}
+              rows={topBorrowers}
+              rowKey="email"
+              emptyMessage="No borrowing activity yet."
+            />
+          </Card>
+        )}
       </div>
 
       {(overdueRate?.overdue ?? 0) > 0 && (

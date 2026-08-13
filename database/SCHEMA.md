@@ -42,7 +42,8 @@ constraint. Making the column nullable would be cleaner and is safe to do.
 `is_active = false` is a soft delete. It has teeth because `requireAuth`
 rejects every request from an inactive account.
 
-`phone` is nullable and only used by the overdue SMS job.
+`phone` is nullable and only used by the overdue SMS job. A member without one
+still gets the overdue notice — it just arrives in-app only. See `notifications`.
 
 ### `books`
 
@@ -88,6 +89,29 @@ worth preserving. This differs deliberately from `borrow_records`, which uses
 
 `UNIQUE (user_id, book_id)` is relied on by the API: adding the same favorite
 twice is an upsert, not an error.
+
+### `notifications`
+
+In-app notices — the delivery channel with no external dependency. Overdue
+reminders were SMS-only, which put the whole feature behind a Termii API key
+and a sender ID awaiting approval; a row here always reaches the member.
+
+`read_at` **is** the unread flag. NULL means unread, so there is no separate
+boolean that could drift out of step with the timestamp.
+
+`notifications_unread_per_loan_key` is a **partial unique index** on
+`(borrow_id, type) WHERE read_at IS NULL AND borrow_id IS NOT NULL`. It stops a
+librarian who clicks "Send reminders" twice from giving every member two
+identical notices. The API relies on it: the duplicate insert is caught as
+Postgres `23505` and reported as `alreadyNotified` rather than an error.
+Scoped to unread rows on purpose — once the member has read the notice, a book
+still overdue next week warrants telling them again.
+
+Prisma cannot express a partial index, so it lives only in the migration SQL.
+Regenerating the schema from the database will not reproduce it.
+
+`user_id` CASCADEs like `favorites`. `borrow_id` is `SET NULL`: a notice the
+member already received still happened, even if the loan record goes.
 
 ---
 
@@ -141,7 +165,7 @@ Until this is scheduled, no loan is ever marked overdue and no fine is created.
 
 ## Migrations
 
-Run in order. All four are applied to the live project as of 2026-08-13
+Run in order. The first four are applied to the live project as of 2026-08-13
 (`users.phone` and `favorites` were both verified present). A fresh project
 still needs them run.
 
@@ -151,6 +175,7 @@ still needs them run.
 | `20260623024516_triggers` | Triggers + CHECK constraints (raw SQL, run manually) |
 | `20260808120000_user_phone` | `users.phone` — **needed for profile editing and SMS** |
 | `20260808130000_favorites` | `favorites` table — **needed for the favorites feature** |
+| `20260813120000_notifications` | `notifications` table — **needed for in-app overdue notices** (not yet applied) |
 
 Apply with `npx prisma migrate deploy`, or paste the SQL into the Supabase SQL
 Editor.

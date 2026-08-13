@@ -1,6 +1,10 @@
-// Librarian — Add New Book. Posts to the real backend (POST /books).
+// Staff (librarian + admin) — Add New Book. Posts to the real backend (POST /books).
 // Backend accepts: title, author, isbn, genre, quantity, available_quantity.
 // There is NO published_year column — do not send one.
+//
+// Mounted under both staff portals, so the "back to catalog" destination comes
+// from usePortal rather than being hard-coded: an admin sent to
+// /librarian/catalog would bounce straight off that portal's role guard.
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Save } from "lucide-react";
@@ -11,9 +15,11 @@ import Button from "../../components/ui/Button.jsx";
 import { validateRequired } from "../../utils/validators.js";
 import { createBook } from "../../services/bookService.js";
 import { GENRES } from "../../constants/genres.js";
+import { usePortal } from "../../hooks/usePortal.js";
 
 export default function AddBookPage() {
   const navigate = useNavigate();
+  const { base } = usePortal();
   const [form, setForm] = useState({
     title: "", author: "", isbn: "", genre: GENRES[0], quantity: "1",
   });
@@ -35,7 +41,7 @@ export default function AddBookPage() {
     setBusy(true);
     try {
       await createBook({ ...form, quantity });
-      navigate("/librarian/catalog");
+      navigate(`${base}/catalog`);
     } catch (err) {
       setErrors({ form: err.message || "Could not save the book." });
     } finally {
@@ -78,7 +84,7 @@ export default function AddBookPage() {
           </p>
           <div style={{ marginTop: 20 }} className="row">
             <Button type="submit" variant="green" disabled={busy}><Save size={16} /> {busy ? "Saving…" : "Save Book"}</Button>
-            <Button type="button" variant="ghost" onClick={() => navigate("/librarian/catalog")}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={() => navigate(`${base}/catalog`)}>Cancel</Button>
           </div>
         </Card>
       </form>

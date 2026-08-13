@@ -996,28 +996,65 @@ counts a loan as overdue if **either** its status is `overdue` **or** its
 
 ---
 
-### 16. Send Overdue SMS Reminders *(stretch)*
-**Endpoint:** `POST /api/admin/send-overdue-reminders` · **Auth:** admin only
+### 16. Send Overdue Reminders
+**Endpoint:** `POST /api/admin/send-overdue-reminders` · **Auth:** staff
+**Body:** `{ "loanId": "uuid" }` — optional. Omit to remind everyone overdue;
+pass one to remind a single member (the per-row "Remind" button).
 
-Texts every member holding an overdue book, via Termii. Requires
-`TERMII_API_KEY` in `.env`. Members with no `phone` are **skipped**, not failed.
-One bad number does not abort the run.
+Reminds every member holding an overdue book, over **two channels**:
+
+1. **In-app notification** — always. A row in `notifications`, no third party
+   involved. This is why the endpoint no longer returns 503 when Termii is
+   unset: an unconfigured SMS provider must not stop members being told.
+2. **SMS via Termii** — only when `TERMII_API_KEY` is present. The key is read
+   per request, so adding it to `.env` and restarting is the entire deployment
+   step. `smsConfigured` reports which mode the run used.
+
+Re-running does **not** stack duplicate notices: a partial unique index rejects
+a second *unread* notice for the same loan, counted back as `alreadyNotified`.
+Once the member reads it, a fresh notice is allowed again.
+
+`skipped` and `failed` describe **the SMS channel only** — a member in either
+list still received the in-app notice. Phone numbers are converted to Termii's
+bare international format by `src/utils/phone.js`; one bad number does not
+abort the run.
 
 **Success Response (200 OK):**
 ```json
 {
   "success": true,
   "totalOverdue": 5,
+  "notified": 4,
+  "alreadyNotified": 1,
   "remindersSent": 3,
-  "skipped": [{ "loanId": "uuid-string", "reason": "No phone number on file" }],
-  "failed":  [{ "loanId": "uuid-string", "reason": "Invalid phone number" }]
+  "smsConfigured": true,
+  "skipped":      [{ "loanId": "uuid-string", "reason": "No phone number on file" }],
+  "failed":       [{ "loanId": "uuid-string", "reason": "\"0244000\" is not a usable phone number..." }],
+  "notifyFailed": [{ "loanId": "uuid-string", "reason": "Loan has no member record" }]
 }
 ```
 
-**Error Response (503 — not configured):**
+**Error Response (404 — single loan not overdue):**
 ```json
-{ "error": "SMS is not configured. Set TERMII_API_KEY in the backend .env file." }
+{ "error": "That loan is not overdue." }
 ```
+
+---
+
+### 16b. Notifications
+**Auth:** any signed-in role. Every handler is scoped to the token holder —
+there is no `:id` in these paths, so one member cannot read another's inbox.
+
+| Endpoint | Returns |
+| :--- | :--- |
+| `GET /api/notifications` | `{ notifications: [...], unreadCount: 2 }` — newest first, capped at 100 |
+| `PUT /api/notifications/:id/read` | `{ "success": true }` · 404 if the id isn't the caller's |
+| `PUT /api/notifications/read-all` | `{ "success": true, "updated": 3 }` — only touches unread rows |
+
+A notification is `{ id, title, body, type, borrow_id, read_at, created_at }`.
+`read_at` is `null` while unread — it doubles as the unread flag, so there is
+no separate boolean to keep in step. `type` is `'overdue_reminder'` or
+`'general'`.
 
 ---
 
