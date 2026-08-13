@@ -5,7 +5,39 @@ export const TOKEN_KEY = "alms_token";
 const USER_KEY = "alms_user";
 
 // Give up rather than leaving a button spinning forever on a dead network.
-const TIMEOUT_MS = 20000;
+//
+// Two limits, because a sleeping backend and a dead one look identical for the
+// first minute. Render's free tier stops the instance after ~15 minutes idle
+// and takes up to a minute to boot again, so the first request after a quiet
+// spell needs room that every later request does not.
+const COLD_TIMEOUT_MS = 60000;
+const WARM_TIMEOUT_MS = 20000;
+
+// Flips on the first response of any kind — even a 401. Anything that came
+// back proves the server is running, which is all this tracks.
+let backendWarm = false;
+
+export function isBackendWarm() {
+  return backendWarm;
+}
+
+/**
+ * Wake the backend without blocking anything.
+ *
+ * Called once at startup so the instance boots while the user is still reading
+ * the page or filling in a form, rather than after they hit submit. Failures
+ * are ignored: this is an optimisation, and the real request reports its own
+ * errors.
+ */
+export function warmUpBackend() {
+  if (import.meta.env.VITE_USE_MOCK !== "false") return;
+
+  // The health check lives at the server root, outside the /api prefix.
+  const origin = BASE_URL.replace(/\/api\/?$/, "");
+  fetch(origin, { method: "GET", cache: "no-store" })
+    .then(() => { backendWarm = true; })
+    .catch(() => { /* the next real request will surface anything that matters */ });
+}
 
 export function getToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -57,7 +89,11 @@ export class SessionExpiredError extends Error {
 export async function request(path, { method = "GET", body, headers = {} } = {}) {
   const token = getToken();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  const wasWarm = backendWarm;
+  const timer = setTimeout(
+    () => controller.abort(),
+    wasWarm ? WARM_TIMEOUT_MS : COLD_TIMEOUT_MS
+  );
 
   let res;
   try {
@@ -74,14 +110,24 @@ export async function request(path, { method = "GET", body, headers = {} } = {})
   } catch (err) {
     // fetch only rejects when the request never completed. "Failed to fetch"
     // means nothing to a user, so say what actually went wrong.
-    throw new NetworkError(
-      err.name === "AbortError"
+    // A timeout on a backend we have never heard from is almost always the
+    // free tier booting, not a fault. Saying so stops it reading as broken.
+    let message;
+    if (err.name === "AbortError") {
+      message = wasWarm
         ? "The server took too long to respond. Please try again."
-        : "Can’t reach the server. Check that the backend is running."
-    );
+        : "The server is waking up — this can take up to a minute on the free plan. Please try again in a moment.";
+    } else {
+      message = "Can’t reach the server. Check that the backend is running.";
+    }
+    throw new NetworkError(message);
   } finally {
     clearTimeout(timer);
   }
+
+  // Any response at all means the instance is up; later requests can use the
+  // shorter timeout.
+  backendWarm = true;
 
   let data = null;
   try { data = await res.json(); } catch { /* no/invalid JSON body */ }
