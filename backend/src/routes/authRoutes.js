@@ -9,6 +9,7 @@ const {
   resetPassword,
   changePassword,
   forgotPassword,
+  resendConfirmation,
 } = require('../controllers/authController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
@@ -16,6 +17,9 @@ const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 router.post('/register', register);
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
+// Re-sends the sign-up confirmation link. Public: the person asking for it
+// cannot sign in yet, by definition.
+router.post('/resend-confirmation', resendConfirmation);
 // Authorised by the recovery token in the emailed link, not by a session.
 router.post('/reset-password', resetPassword);
 

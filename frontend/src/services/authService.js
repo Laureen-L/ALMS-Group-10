@@ -6,14 +6,28 @@ export async function login(email, password) {
   return api.post("/auth/login", { email, password });
 }
 
-// POST /auth/register -> { success, message, user }
+// POST /auth/register -> { success, needsConfirmation, message, user }
 // role may be "student" or "librarian"; the backend rejects "admin".
+//
+// needsConfirmation is true when Supabase is holding the account until the
+// emailed link is clicked, so the caller knows not to promise an immediate
+// sign-in. Mock mode has no email step, hence false.
 export async function register({ full_name, email, password, role = "student" }) {
   if (import.meta.env.VITE_USE_MOCK !== "false") {
     if (role === "admin") throw new Error("Cannot self-register as admin");
-    return { success: true, message: "Registered successfully" };
+    return { success: true, needsConfirmation: false, message: "Registered successfully" };
   }
   return api.post("/auth/register", { full_name, email, password, role });
+}
+
+// POST /auth/resend-confirmation -> { success, message }
+// Answers the same way whether or not the address is registered, so the
+// message is a neutral "if it needs confirming" rather than a confirmation.
+export async function resendConfirmation(email) {
+  if (import.meta.env.VITE_USE_MOCK !== "false") {
+    return { success: true, message: "Confirmation email sent." };
+  }
+  return api.post("/auth/resend-confirmation", { email });
 }
 
 export async function forgotPassword(email) {

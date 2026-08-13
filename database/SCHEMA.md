@@ -52,8 +52,15 @@ rejects every request from an inactive account.
 circulation desk looks books up by it, so it must be populated for a title to
 be scannable.
 
-There is **no `published_year` column**, despite some frontend code and the
-older API contract referencing one. Sending it to `POST /api/books` will fail.
+`isbn` is `VARCHAR(13)`, which holds an ISBN-13 only in its **bare** form — the
+printed, hyphenated form ("978-0-13-235088-4") is too long to store. The API
+therefore strips hyphens and spaces on every write and on every lookup
+(`backend/src/utils/isbn.js`), so the two formats are interchangeable at the
+edge. A row inserted by hand through the Supabase dashboard bypasses that and
+will not be findable by scan.
+
+There is **no `published_year` column**. Nothing sends one any more, but the
+column is absent, so a request that names it is rejected outright.
 
 ### `borrow_records`
 
@@ -134,7 +141,9 @@ Until this is scheduled, no loan is ever marked overdue and no fine is created.
 
 ## Migrations
 
-Run in order. The two most recent are **not yet applied** to the live project.
+Run in order. All four are applied to the live project as of 2026-08-13
+(`users.phone` and `favorites` were both verified present). A fresh project
+still needs them run.
 
 | Migration | Adds |
 | :--- | :--- |
@@ -173,16 +182,26 @@ through to its default:
 * `getMembers` returns `[]`
 * `register`'s insert into `users` is rejected
 
-### The fix
+### The fix — applied 2026-08-13
 
-The backend must use the **service role** key, not the anon key. Service role
-bypasses RLS, which is the correct posture for a server-side API that does its
-own authorization in `requireAuth` / `requireRole`.
+The backend's shared database client runs on the **service role** key. Service
+role bypasses RLS, which is the correct posture for a server-side API that does
+its own authorization in `requireAuth` / `requireRole`.
 
 ```
-# backend/.env
-SUPABASE_ANON_KEY=<service role key>   # Project Settings > API > service_role
+# backend/.env — a distinct variable, alongside the anon key, not replacing it
+SUPABASE_SERVICE_ROLE_KEY=<service role key>   # Project Settings > API
 ```
+
+Set it as its own variable rather than pasting the service role key into
+`SUPABASE_ANON_KEY`, which is what an earlier version of this document
+suggested. The two are not interchangeable: `authClient()` and `scopedClient()`
+in [`supabaseClient.js`](../backend/src/config/supabaseClient.js) deliberately
+stay on the anon key, because sign-in and any request that must act *as the
+caller* have to run under the caller's own identity, not as a superuser.
+
+If `SUPABASE_SERVICE_ROLE_KEY` is unset the server still boots, on the anon key,
+and warns at startup — the old silent-failure mode is now audible.
 
 The service role key must **never** reach the browser. It is only safe here
 because `backend/` is server-side. Do not copy it into any `VITE_*` variable —

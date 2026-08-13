@@ -27,9 +27,19 @@ Copy [`.env.example`](.env.example) and fill it in.
 ```
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_ANON_KEY=<anon key>
+SUPABASE_SERVICE_ROLE_KEY=<service_role key>
 PORT=5001          # 5000 is taken by macOS AirPlay Receiver
 TERMII_API_KEY=          # optional, only for overdue SMS
 ```
+
+> The **service role key is required in practice.** RLS is enabled on `users`,
+> and under the anon key that table reads back empty with no error — every
+> caller resolves as a "student" and the member list is blank. The server
+> starts either way but warns at boot. Both keys are on the same dashboard
+> page: Project Settings > API.
+>
+> It bypasses RLS, so it is server-side only. Never put it in a `VITE_*`
+> variable — those are compiled into the frontend bundle.
 
 **`frontend/.env`** — optional. Without it the UI runs on mock data and needs
 no backend at all:
@@ -44,11 +54,10 @@ VITE_API_BASE_URL=http://localhost:5001/api
 
 ### 3. Apply migrations
 
-See [`database/SCHEMA.md`](database/SCHEMA.md). Two migrations are **not yet
-applied** to the live project and features will fail without them:
-
-* `20260808120000_user_phone` — profile editing, SMS reminders
-* `20260808130000_favorites` — the favorites feature
+See [`database/SCHEMA.md`](database/SCHEMA.md). All four migrations are applied
+to the live project as of 2026-08-13 — `users.phone` and the `favorites` table
+were both verified present, so profile editing, SMS reminders and favorites
+have the schema they need. A fresh project still needs them run.
 
 The trigger migration (`20260623024516_triggers`) is raw SQL that Prisma does
 not run for you, and `trg_update_availability` is what keeps book availability
@@ -105,13 +114,24 @@ page bypasses all three.
 
 ## Known gaps
 
-* **The backend needs the Supabase _service role_ key, not the anon key.**
-  RLS is enabled on `users`, and under the anon key that table reads back empty
-  with no error — so every user silently becomes a "student" and the member
-  list comes back blank. See `database/SCHEMA.md`.
 * **No automated tests.** Verification so far has been manual.
 * **Reports aggregate in JS** and read at most Supabase's default 1000-row
   page. Correct at the scale in the SRS; needs Postgres RPCs beyond it.
-* **`books.published_year` doesn't exist** but some frontend code still sends
-  it — Add Book will reject it.
-* **Password changes** are not implemented; the button is disabled.
+* **`GET /api/books` returns the whole catalogue.** There is no `limit` or
+  `offset`, and a `limit` in the query string is ignored rather than rejected.
+  Same 1000-row ceiling as above.
+* **`books.published_year` doesn't exist.** The column was never added, so a
+  body naming it is dropped before it reaches the database. Nothing sends it any
+  more; the note is here because two earlier task specs asked for the field.
+* **Deactivating or demoting a member only writes `public.users`.** The role in
+  the auth record's `user_metadata` is left alone, and `resolveIdentity` falls
+  back to it whenever that table can't be read — so on a misconfigured deploy a
+  demoted user keeps their old role. Closing this needs
+  `auth.admin.updateUserById`.
+* **`books.isbn` is `VARCHAR(13)`,** so it holds only the bare form. The API
+  strips hyphens and spaces on the way in and on lookup; a row written directly
+  through the Supabase dashboard in hyphenated form will not be findable at the
+  circulation desk.
+* **Borrowing races on the last copy** resolve at the database CHECK
+  constraint, which the API reports as a 409. Correct, but the loser sees a
+  retry prompt rather than the transaction being queued.

@@ -31,9 +31,19 @@ export default function SignUpPage() {
 
     setBusy(true);
     try {
-      await register({ full_name: fullName, email, password, role });
+      const res = await register({ full_name: fullName, email, password, role });
+      // Whether a confirmation email is required is a Supabase project setting,
+      // so only the backend's response knows. Promising "sign in to continue"
+      // unconditionally sends people to a login that rejects them until they
+      // click a link nobody told them about.
       navigate("/login", {
-        state: { notice: "Account created. Sign in to continue." },
+        state: {
+          email,
+          needsConfirmation: !!res?.needsConfirmation,
+          notice: res?.needsConfirmation
+            ? "Account created. Check your email for a confirmation link, then sign in."
+            : "Account created. Sign in to continue.",
+        },
       });
     } catch (err) {
       setErrors({ form: err.message || "Could not create your account. Try again." });

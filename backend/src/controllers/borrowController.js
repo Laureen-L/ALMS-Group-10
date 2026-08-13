@@ -1,4 +1,5 @@
 const supabase = require('../config/supabaseClient');
+const { normalizeIsbn } = require('../utils/isbn');
 
 /*
  * Schema (see prisma/schema.prisma):
@@ -37,8 +38,11 @@ const resolveBook = async ({ isbn, bookId }) => {
   }
 
   const query = supabase.from('books').select('id, title, isbn, available_quantity');
+  // Scanners and typists produce hyphenated ISBNs; the column stores the bare
+  // form. Without normalising, an exact match here reports "Book not found"
+  // for a book that is sitting in the catalogue.
   const { data, error } = isbn
-    ? await query.eq('isbn', isbn).maybeSingle()
+    ? await query.eq('isbn', normalizeIsbn(isbn)).maybeSingle()
     : await query.eq('id', bookId).maybeSingle();
 
   if (error) return { error: { status: 400, message: error.message } };
@@ -158,6 +162,15 @@ const borrowBook = async (req, res) => {
       borrow: borrowRecord,
     });
   } catch (err) {
+    // The stock check above and the trigger's decrement are separate
+    // statements, so two desks checking out the last copy at once can both
+    // pass the check. The CHECK constraint on available_quantity catches it —
+    // report that as the "no copies left" it actually is, not a 500.
+    if (err.code === '23514') {
+      return res.status(409).json({
+        error: 'The last copy was taken a moment ago. Refresh and try again.',
+      });
+    }
     console.error('borrowBook error:', err);
     return res.status(500).json({ error: 'Something went wrong while borrowing the book' });
   }

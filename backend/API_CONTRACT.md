@@ -163,7 +163,9 @@ Initiates the password recovery flow by generating a secure reset token and disp
     "title": "The Pragmatic Programmer",
     "author": "David Thomas",
     "genre": "Technology",
-    "published_year": 1999,
+    "isbn": "9780135957059",
+    "quantity": 5,
+    "available_quantity": 3,
     "created_at": "2026-06-26T21:00:00.000Z"
   }
 ]
@@ -175,7 +177,9 @@ Response (200 OK):
   "title": "The Pragmatic Programmer",
   "author": "David Thomas",
   "genre": "Technology",
-  "published_year": 1999,
+  "isbn": "9780135957059",
+  "quantity": 5,
+  "available_quantity": 3,
   "created_at": "2026-06-26T21:00:00.000Z"
 }
 Error Response (404 Not Found):
@@ -192,7 +196,8 @@ JSON
   "title": "Clean Code",
   "author": "Robert C. Martin",
   "genre": "Technology",
-  "published_year": 2008
+  "isbn": "9780132350884",
+  "quantity": 3
 }
 Response (201 Created):
 JSON
@@ -203,7 +208,9 @@ JSON
     "title": "Clean Code",
     "author": "Robert C. Martin",
     "genre": "Technology",
-    "published_year": 2008,
+    "isbn": "9780132350884",
+    "quantity": 3,
+    "available_quantity": 3,
     "created_at": "2026-06-26T22:00:00.000Z"
   }
 }
@@ -224,7 +231,9 @@ JSON
     "title": "Clean Code",
     "author": "Robert C. Martin",
     "genre": "Software Engineering",
-    "published_year": 2008,
+    "isbn": "9780132350884",
+    "quantity": 3,
+    "available_quantity": 3,
     "created_at": "2026-06-26T22:00:00.000Z"
   }
 }
@@ -342,6 +351,13 @@ JSON
 ### 1. Student Dashboard
 **Endpoint:** `GET /api/admin/student/dashboard/:id`  
 **Headers:** `Authorization: Bearer <token>`
+
+`:id` must be the caller's own id unless the caller is a librarian or an admin —
+anyone else gets **403**, so this cannot be used to read another member's loans:
+
+```json
+{ "error": "You can only view your own borrowing dashboard" }
+```
 
 **Success Response (200 OK):**
 ```json
@@ -826,6 +842,17 @@ or, unchanged from before:
 
 404 — `{ "error": "Book not found" }` / `{ "error": "Member not found" }`
 
+409 (two desks took the last copy at the same moment — the stock check and the
+trigger's decrement are separate statements, so the database CHECK constraint is
+what settles it)
+```json
+{ "error": "The last copy was taken a moment ago. Refresh and try again." }
+```
+
+> `isbn` is matched on its **bare** form: hyphens and spaces are stripped from
+> the request before lookup, so `978-0132350884` and `9780132350884` are the same
+> book. Same on write — see §20.
+
 ---
 
 ### 10. Return a Book *(changed — now accepts ISBN)*
@@ -1064,7 +1091,9 @@ what the per-row "Remind" button sends.
 **Endpoints:** `POST /api/books`, `PUT /api/books/:id`
 
 **`published_year` does not exist** in the `books` table. The frontend used to
-send it, so every save failed. Accepted fields are:
+send it, so every save failed. These six fields are the *only* ones accepted —
+anything else in the body is discarded, including `id`, `added_by` and
+`created_at`, which the server and the database own:
 
 ```json
 {
@@ -1077,6 +1106,23 @@ send it, so every save failed. Accepted fields are:
 }
 ```
 
+`added_by` is set from the caller's token, so `POST` records which member of
+staff added the title without being told (FR-08).
+
 `isbn` is unique when present — send `null`, not `""`, when a book has none, or
 a second untitled-ISBN book will collide. Books without an ISBN cannot be
 scanned at the circulation desk.
+
+Hyphens and spaces are stripped from `isbn` before it is stored, because the
+column is `VARCHAR(13)` and the printed form does not fit. What remains must be
+10 or 13 characters, otherwise **400**:
+
+```json
+{ "error": "ISBN must have 10 or 13 digits (hyphens and spaces are ignored)." }
+```
+
+`title` and `author` are required on `POST` (**400** otherwise), and
+`available_quantity` may not exceed `quantity` (**400**, ahead of the database's
+CHECK constraint). `PUT` with no recognised field returns **400 Nothing to
+update.**, and an unknown `:id` now returns **404** rather than a success with an
+empty body.

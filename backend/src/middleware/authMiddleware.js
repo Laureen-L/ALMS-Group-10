@@ -36,7 +36,10 @@ const resolveIdentity = async (authUser) => {
     // Only trust a role the app itself wrote. Anything else defaults to the
     // least-privileged role rather than silently granting access.
     role: VALID_ROLES.includes(meta.role) ? meta.role : 'student',
-    is_active: true,
+    // Admin actions mirror activation here (see mirrorToAuthMetadata), so a
+    // deactivation still bites on this path. Absent means never deactivated —
+    // only an explicit `false` locks the account.
+    is_active: meta.is_active !== false,
     source: 'user_metadata',
   };
 };

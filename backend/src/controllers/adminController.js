@@ -1,12 +1,22 @@
 const supabase = require('../config/supabaseClient');
 
+const STAFF_ROLES = ['admin', 'librarian'];
+
 /**
  * GET /api/student/dashboard/:id
  * FR-14, FR-15: current borrows + due dates + history
+ *
+ * Mounted behind requireAuth only, so the :id has to be checked here: any
+ * signed-in member could otherwise read another member's loans and full
+ * borrowing history just by changing the id in the URL.
  */
 const getStudentDashboard = async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (id !== req.user.id && !STAFF_ROLES.includes(req.user.role)) {
+      return res.status(403).json({ error: 'You can only view your own borrowing dashboard' });
+    }
 
     const { data: activeLoans, error: activeError } = await supabase
       .from('borrow_records')
@@ -115,9 +125,11 @@ const getLibrarianDashboard = async (req, res) => {
  */
 const getMembers = async (req, res) => {
   try {
+    // Named columns rather than '*': users.password_hash has no business
+    // leaving the server, even holding the sentinel that it does here.
     const { data, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, full_name, email, phone, role, is_active, created_at')
       .order('created_at', { ascending: false });
 
     if (error) throw error;
@@ -251,6 +263,40 @@ const getAdminStats = async (req, res) => {
 const VALID_ROLES = ['student', 'librarian', 'admin'];
 
 /**
+ * Mirror a role or activation change into the auth record's user_metadata.
+ *
+ * public.users is the source of truth, but resolveIdentity() falls back to
+ * user_metadata whenever that table can't be read. Writing only public.users
+ * left the fallback holding whatever was true at sign-up — so a demoted admin
+ * kept administrator access, and a deactivated member kept getting in, on any
+ * deploy where the fallback was in play.
+ *
+ * Best-effort: the public.users write has already succeeded and is what the
+ * app reads normally, so a failure here is logged rather than surfaced. Needs
+ * the service role key — the admin API rejects the anon key.
+ */
+const mirrorToAuthMetadata = async (userId, patch) => {
+  let failure;
+  try {
+    const { error } = await supabase.auth.admin.updateUserById(userId, { user_metadata: patch });
+    failure = error?.message;
+  } catch (err) {
+    // updateUserById *throws* on a malformed id rather than returning an error.
+    // The primary write has already succeeded, so nothing here may take the
+    // request down with it.
+    failure = err.message;
+  }
+
+  if (failure) {
+    console.warn(
+      `mirrorToAuthMetadata: could not update auth metadata for ${userId} —`,
+      `${failure}. public.users is updated; the user_metadata fallback is now stale.`
+    );
+  }
+  return !failure;
+};
+
+/**
  * PUT /api/admin/members/:id/role
  * Body: { role }
  */
@@ -278,7 +324,11 @@ const updateMemberRole = async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
 
-    return res.status(200).json({ success: true, user: data });
+    // Keep the auth record's copy of the role in step, or the metadata
+    // fallback will keep granting the role this call just took away.
+    const mirrored = await mirrorToAuthMetadata(id, { role });
+
+    return res.status(200).json({ success: true, user: data, authMetadataMirrored: mirrored });
   } catch (err) {
     console.error('updateMemberRole error:', err);
     return res.status(500).json({ error: 'Failed to update role' });
@@ -322,7 +372,9 @@ const deactivateMember = async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
 
-    return res.status(200).json({ success: true, user: data });
+    const mirrored = await mirrorToAuthMetadata(id, { is_active: false });
+
+    return res.status(200).json({ success: true, user: data, authMetadataMirrored: mirrored });
   } catch (err) {
     console.error('deactivateMember error:', err);
     return res.status(500).json({ error: 'Failed to deactivate account' });
@@ -345,7 +397,9 @@ const reactivateMember = async (req, res) => {
     if (error) return res.status(400).json({ error: error.message });
     if (!data) return res.status(404).json({ error: 'Member not found' });
 
-    return res.status(200).json({ success: true, user: data });
+    const mirrored = await mirrorToAuthMetadata(req.params.id, { is_active: true });
+
+    return res.status(200).json({ success: true, user: data, authMetadataMirrored: mirrored });
   } catch (err) {
     console.error('reactivateMember error:', err);
     return res.status(500).json({ error: 'Failed to reactivate account' });

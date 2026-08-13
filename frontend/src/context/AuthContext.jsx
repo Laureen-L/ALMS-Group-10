@@ -1,7 +1,8 @@
 // Auth state: current user, role, login/logout.
 // Toggle between MOCK login and the REAL backend with one line in .env:
 //   VITE_USE_MOCK=true   -> mock logins (student@/librarian@/admin@), no backend needed
-//   VITE_USE_MOCK=false  -> real POST /auth/login against http://localhost:5000/api
+//   VITE_USE_MOCK=false  -> real POST /auth/login against VITE_API_BASE_URL
+//                           (default http://localhost:5001/api)
 import { createContext, useContext, useEffect, useState } from "react";
 import { TOKEN_KEY, onSessionExpired } from "../services/apiClient.js";
 import { ROLES } from "../constants/roles.js";

@@ -1,5 +1,5 @@
 const supabase = require('../config/supabaseClient');
-const { scopedClient } = require('../config/supabaseClient');
+const { authClient, updatePassword } = require('../config/supabaseClient');
 const { resolveIdentity } = require('../middleware/authMiddleware');
 
 // Roles a user is allowed to pick for themselves at sign-up.
@@ -30,7 +30,10 @@ const register = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.signUp({
+    // authClient(), not the shared client: a sign-up returns a session, and a
+    // session left on the shared client would be used as the identity for
+    // every later database query in the process.
+    const { data, error } = await authClient().auth.signUp({
       email,
       password,
       // Carry identity in the auth record itself. public.users may be
@@ -54,14 +57,29 @@ const register = async (req, res) => {
       return res.status(400).json({ error: 'Sign-up did not return a user. Please try again.' });
     }
 
+    // With email confirmation on, signing up an address that already exists is
+    // not an error: Supabase returns a decoy user with no identities and sends
+    // no email, so the response cannot be used to probe which addresses are
+    // registered. Answer exactly as we would for a genuinely new sign-up —
+    // saying "that email is taken" here would give away the thing the decoy
+    // exists to hide. Stop before the mirror insert: the id is not a real user.
+    if (Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+      return res.status(201).json({
+        success: true,
+        needsConfirmation: true,
+        message: 'Account created. Check your email for a confirmation link before signing in.',
+      });
+    }
+
     // Mirror the auth user into public.users so the member list and reports
     // find them. id must match the auth uid — everything joins on it.
     //
-    // Use the new user's own session when there is one: that request runs as
-    // the `authenticated` role, which RLS policies usually permit, whereas the
-    // shared anon client is typically blocked.
-    const writer = data.session ? scopedClient(data.session.access_token) : supabase;
-    const { error: profileError } = await writer.from('users').insert({
+    // The shared client holds the service role key and so bypasses RLS. This
+    // used to write as the new user instead, because the anon key could not
+    // get past the policy on `users`; that workaround also meant sign-ups with
+    // email confirmation on — which return no session — silently skipped the
+    // mirror. Neither problem applies now.
+    const { error: profileError } = await supabase.from('users').insert({
       id: data.user.id,
       full_name: fullName,
       email,
@@ -77,9 +95,19 @@ const register = async (req, res) => {
       console.warn('register: could not mirror into public.users —', profileError.message);
     }
 
+    // No session means Supabase is holding the account until the emailed link
+    // is clicked. Whether that happens is a project setting (Authentication >
+    // Sign In / Providers > Confirm email), not something the frontend can
+    // predict — so tell it, rather than letting it promise "sign in now" and
+    // then fail on a login the user cannot yet make.
+    const needsConfirmation = !data.session;
+
     return res.status(201).json({
       success: true,
-      message: 'Registered successfully',
+      needsConfirmation,
+      message: needsConfirmation
+        ? 'Account created. Check your email for a confirmation link before signing in.'
+        : 'Registered successfully',
       profileMirrored: !profileError,
       user: {
         id: data.user.id,
@@ -91,6 +119,46 @@ const register = async (req, res) => {
   } catch (err) {
     console.error('register error:', err);
     return res.status(500).json({ error: 'Internal server error.', details: err.message });
+  }
+};
+
+// 1b. POST /api/auth/resend-confirmation
+// The confirmation email expires, lands in spam, or arrives while the tab is
+// closed. Without this the account is stuck: it exists, so signing up again
+// hits the decoy path above and sends nothing.
+const resendConfirmation = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'A valid email is required.' });
+  }
+
+  try {
+    // authClient(), not the shared client — same reason as sign-in: this
+    // touches auth state and must not leave anything on a shared client.
+    const { error } = await authClient().auth.resend({ type: 'signup', email });
+
+    if (error) {
+      console.warn('resendConfirmation:', error.message);
+
+      // Rate limiting is the one failure worth reporting honestly — the caller
+      // needs to know that waiting, not retrying, is the fix. Everything else
+      // falls through to the neutral answer below, so this endpoint can't be
+      // used to tell a registered address from an unregistered one.
+      if (error.status === 429) {
+        return res.status(429).json({
+          error: 'Too many requests. Wait a minute before asking for another email.',
+        });
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'If that address still needs confirming, a new link is on its way.',
+    });
+  } catch (err) {
+    console.error('resendConfirmation error:', err);
+    return res.status(500).json({ error: 'Could not send the confirmation email.' });
   }
 };
 
@@ -144,7 +212,10 @@ const login = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    // authClient(), not the shared client — see the note in supabaseClient.js.
+    // A session left behind here would make this user the effective identity
+    // for every subsequent request's database queries.
+    const { data, error } = await authClient().auth.signInWithPassword({ email, password });
 
     if (error) {
       return res.status(401).json({ success: false, message: error.message });
@@ -277,8 +348,8 @@ const resetPassword = async (req, res) => {
       return res.status(401).json({ error: 'This reset link is invalid or has expired. Request a new one.' });
     }
 
-    const { error } = await scopedClient(recoveryToken).auth.updateUser({ password: nextPassword });
-    if (error) return res.status(400).json({ error: error.message });
+    const { error } = await updatePassword(recoveryToken, nextPassword);
+    if (error) return res.status(error.status || 400).json({ error: error.message });
 
     return res.status(200).json({ success: true, message: 'Password updated. You can now sign in.' });
   } catch (err) {
@@ -304,7 +375,9 @@ const changePassword = async (req, res) => {
   }
 
   try {
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    // A throwaway client, so verifying the old password doesn't leave a session
+    // on the shared client — see the note in supabaseClient.js.
+    const { error: signInError } = await authClient().auth.signInWithPassword({
       email: req.user.email,
       password: currentPassword,
     });
@@ -313,8 +386,8 @@ const changePassword = async (req, res) => {
     }
 
     const bearer = req.headers.authorization.split(' ')[1];
-    const { error } = await scopedClient(bearer).auth.updateUser({ password: newPassword });
-    if (error) return res.status(400).json({ error: error.message });
+    const { error } = await updatePassword(bearer, newPassword);
+    if (error) return res.status(error.status || 400).json({ error: error.message });
 
     return res.status(200).json({ success: true, message: 'Password changed.' });
   } catch (err) {
@@ -357,5 +430,6 @@ module.exports = {
   lookupMember,
   resetPassword,
   changePassword,
-  forgotPassword
+  forgotPassword,
+  resendConfirmation
 };

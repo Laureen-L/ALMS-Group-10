@@ -1,12 +1,14 @@
 require('dotenv').config();
 const express = require('express');
 
-const authRoutes = require('./src/routes/authRoutes')
 const cors = require("cors");
 const app = express();
 app.use(cors());
 
-const PORT = process.env.PORT || 5000;
+// 5001, not 5000: macOS gives port 5000 to the AirPlay Receiver, where it
+// answers requests with a 403 that looks like a bug in this server. The
+// frontend's default VITE_API_BASE_URL points here too.
+const PORT = process.env.PORT || 5001;
 
 // Global Middleware
 app.use(express.json());
