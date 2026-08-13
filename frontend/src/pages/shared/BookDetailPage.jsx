@@ -73,7 +73,7 @@ export default function BookDetailPage() {
         onClick={() => navigate(`${base}/catalog`)}
         style={{ marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
       >
-        <ArrowLeft size={16} /> Back to catalog
+        <ArrowLeft size={16} /> Back to books
       </button>
 
       <div className="row row--between" style={{ flexWrap: "wrap", gap: 12 }}>

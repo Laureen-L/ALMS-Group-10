@@ -102,7 +102,7 @@ export default function LibrarianDashboardPage() {
       {/* Every card is the way into the screen that owns that number. */}
       <div className="grid-stats" style={{ marginTop: 18 }}>
         <StatCard
-          tone="neutral" icon={BookOpen} eyebrow="Catalog"
+          tone="neutral" icon={BookOpen} eyebrow="Books"
           value={String(stats.totalBooks ?? 0)} label="Total Books"
           onClick={() => navigate("/librarian/catalog")}
         />

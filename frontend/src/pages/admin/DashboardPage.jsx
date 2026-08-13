@@ -42,7 +42,7 @@ export default function AdminDashboardPage() {
       {/* Every card leads somewhere. "Total Books" was a dead number until
           admins got a catalog route of their own. */}
       <div className="grid-stats">
-        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Catalog" value={String(stats.totalBooks ?? 0)}   label="Total Books"   onClick={() => navigate("/admin/catalog")} />
+        <StatCard tone="neutral"  icon={BookOpen}      eyebrow="Books" value={String(stats.totalBooks ?? 0)}   label="Total Books"   onClick={() => navigate("/admin/catalog")} />
         <StatCard tone="active"   icon={Users}         eyebrow="People"  value={String(stats.totalMembers ?? 0)} label="Total Members" onClick={() => navigate("/admin/users")} />
         <StatCard tone="active"   icon={ClipboardCheck} eyebrow="Active" value={String(stats.activeLoans ?? 0)}  label="Active Loans"  onClick={() => navigate("/admin/borrow-records")} />
         <StatCard tone="critical" icon={AlertTriangle} eyebrow="Action"  value={String(stats.overdueLoans ?? 0)} label="Overdue Loans" onClick={() => navigate("/admin/overdue")} />

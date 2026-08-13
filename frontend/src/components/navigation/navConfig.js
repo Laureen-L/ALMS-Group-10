@@ -25,7 +25,7 @@ export const NAV = {
     { to: "/librarian/overdue",     label: "Overdue Loans",      icon: AlertTriangle, badgeKey: "overdue" },
     { to: "/librarian/due-soon",    label: "Due Soon",           icon: CalendarClock },
     { to: "/librarian/fines",       label: "Fines",              icon: Coins },
-    { to: "/librarian/catalog",     label: "Catalog",            icon: BookOpen },
+    { to: "/librarian/catalog",     label: "Browse Books",       icon: BookOpen },
     { to: "/librarian/books/new",   label: "Add New Book",       icon: PlusSquare },
     { to: "/librarian/inventory",   label: "Inventory",          icon: Boxes },
     { to: "/librarian/members",     label: "Members",            icon: Users },
@@ -36,7 +36,7 @@ export const NAV = {
   admin: [
     { to: "/admin/dashboard",      label: "Dashboard",       icon: LayoutDashboard },
     { to: "/admin/users",          label: "User Management", icon: Users },
-    { to: "/admin/catalog",        label: "Catalog",         icon: BookOpen },
+    { to: "/admin/catalog",        label: "Browse Books",    icon: BookOpen },
     { to: "/admin/borrow-records", label: "Borrow Records",  icon: ClipboardList },
     // Was reachable only by clicking a dashboard stat card.
     { to: "/admin/overdue",        label: "Overdue Loans",   icon: AlertTriangle, badgeKey: "overdue" },

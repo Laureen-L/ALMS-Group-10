@@ -162,7 +162,7 @@ export default function ImportBooksPage() {
         onClick={() => navigate(`${base}/catalog`)}
         style={{ marginBottom: 12, display: "inline-flex", alignItems: "center", gap: 6 }}
       >
-        <ArrowLeft size={16} /> Back to catalog
+        <ArrowLeft size={16} /> Back to books
       </button>
 
       <h1 className="page-title">Import Books</h1>
@@ -259,7 +259,7 @@ Things Fall Apart,Chinua Achebe,9780385474542,Fiction,4
             )}
 
             <div className="row" style={{ gap: 8, marginTop: 16 }}>
-              <Button variant="green" onClick={() => navigate(`${base}/catalog`)}>View catalog</Button>
+              <Button variant="green" onClick={() => navigate(`${base}/catalog`)}>View books</Button>
               <Button variant="ghost" onClick={reset}>Import another file</Button>
             </div>
           </Card>

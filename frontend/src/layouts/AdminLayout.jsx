@@ -30,5 +30,5 @@ export default function AdminLayout({ role = "admin" }) {
     return () => { cancelled = true; };
   }, []);
 
-  return <PortalShell role={role} badges={badges} searchPlaceholder="Search catalog…" />;
+  return <PortalShell role={role} badges={badges} searchPlaceholder="Search books…" />;
 }
