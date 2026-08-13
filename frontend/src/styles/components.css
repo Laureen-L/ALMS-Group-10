@@ -43,6 +43,19 @@
 .input--filled { background: var(--cream-dark); border-color: transparent; }
 .field__error { font-size: 12px; color: var(--red-600); }
 
+/* ---------- Password toggle ---------- */
+.input-wrapper { display: flex; position: relative; }
+.input-wrapper .input { flex: 1; }
+.input--has-toggle { padding-right: 42px; }
+.pw-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; padding: 0; border: none; border-radius: 4px;
+  background: transparent; color: var(--muted); cursor: pointer;
+  transition: color .15s ease, background .15s ease;
+}
+.pw-toggle:hover { color: var(--ink); background: rgba(0,0,0,.06); }
+
 /* ---------- Toggle ---------- */
 .toggle { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
 .toggle__track {

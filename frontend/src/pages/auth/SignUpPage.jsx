@@ -7,7 +7,7 @@ import Input from "../../components/ui/Input.jsx";
 import Select from "../../components/ui/Select.jsx";
 import Button from "../../components/ui/Button.jsx";
 import { register } from "../../services/authService.js";
-import { validateEmail, validateRequired, validatePassword } from "../../utils/validators.js";
+import { validateEmail, validateRequired, validatePassword, validateMatch } from "../../utils/validators.js";
 
 export default function SignUpPage() {
   const navigate = useNavigate();
@@ -15,6 +15,7 @@ export default function SignUpPage() {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState("student");
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -25,9 +26,10 @@ export default function SignUpPage() {
       fullName: validateRequired(fullName, "Full name"),
       email: validateEmail(email),
       password: validatePassword(password),
+      confirmPassword: validateMatch(password, confirmPassword),
     };
     setErrors(next);
-    if (next.fullName || next.email || next.password) return;
+    if (next.fullName || next.email || next.password || next.confirmPassword) return;
 
     setBusy(true);
     try {
@@ -72,6 +74,10 @@ export default function SignUpPage() {
           id="password" label="Password" type="password" placeholder="At least 8 characters"
           value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password}
         />
+        <Input
+          id="confirm_password" label="Confirm password" type="password" placeholder="Re-enter your password"
+          value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} error={errors.confirmPassword}
+        />
         <Select
           id="role" label="I am a" value={role} onChange={(e) => setRole(e.target.value)}
           options={[
@@ -91,3 +97,4 @@ export default function SignUpPage() {
     </form>
   );
 }
+
