@@ -65,7 +65,9 @@ export default function SearchBooksPage() {
   // staying inside one genre would silently hide most of the matches.
   useEffect(() => {
     const incoming = params.get("search");
-    if (incoming === null) return;
+    // No ?search= at all means we arrived fresh (the sidebar's Browse Books
+    // link), so start from a clean shelf rather than a query left behind.
+    if (incoming === null) { setSearch(""); return; }
     setSearch(incoming);
     if (incoming) setSelectedGenre(null);
   }, [params]);
