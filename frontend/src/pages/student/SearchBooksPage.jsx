@@ -59,6 +59,17 @@ export default function SearchBooksPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // The topbar searches as you type and rewrites ?search=, so mirror the URL
+  // into the field instead of only reading it once on mount. A topbar search
+  // also drops the current shelf — it's meant to reach the whole catalog, and
+  // staying inside one genre would silently hide most of the matches.
+  useEffect(() => {
+    const incoming = params.get("search");
+    if (incoming === null) return;
+    setSearch(incoming);
+    if (incoming) setSelectedGenre(null);
+  }, [params]);
+
   useEffect(() => {
     if (!showResults) return;
     let cancelled = false;

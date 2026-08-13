@@ -13,9 +13,13 @@ import StatusBadge from "../../components/tables/StatusBadge.jsx";
 import BorrowLimit from "../../components/books/BorrowLimit.jsx";
 import BookTile from "../../components/books/BookTile.jsx";
 import { getStudentDashboard } from "../../services/borrowService.js";
-import { getPopularBooks } from "../../services/bookService.js";
+import { getPopularBooks, getBooks } from "../../services/bookService.js";
 import { getFavorites } from "../../services/userService.js";
+import { useDebounce } from "../../hooks/useDebounce.js";
 import { useAuth } from "../../context/AuthContext.jsx";
+
+// How many matches to show inline before pointing at the full results page.
+const SUGGEST_LIMIT = 6;
 
 export default function StudentDashboardPage() {
   const { user } = useAuth();
@@ -24,8 +28,12 @@ export default function StudentDashboardPage() {
   const [popularBooks, setPopularBooks] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
+  const [matches, setMatches] = useState([]);
+  const [searching, setSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const debouncedQuery = useDebounce(searchQuery, 250);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +58,20 @@ export default function StudentDashboardPage() {
     load();
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // Matching books surface right under the field as the query is typed —
+  // no need to submit first just to find out whether the library has it.
+  useEffect(() => {
+    const q = debouncedQuery.trim();
+    if (!q) { setMatches([]); setSearching(false); return; }
+    let cancelled = false;
+    setSearching(true);
+    getBooks({ search: q })
+      .then((r) => { if (!cancelled) setMatches(r); })
+      .catch(() => { if (!cancelled) setMatches([]); })
+      .finally(() => { if (!cancelled) setSearching(false); });
+    return () => { cancelled = true; };
+  }, [debouncedQuery]);
 
   const openBook = (book) => navigate(`/student/catalog/${book.id}`);
 
@@ -85,6 +107,41 @@ export default function StudentDashboardPage() {
             </div>
             <Button type="submit" variant="gold"><Search size={16} /> Search</Button>
           </form>
+
+          {searchQuery.trim() && (
+            <div className="suggest">
+              {searching && matches.length === 0 && (
+                <div className="suggest__empty">Searching…</div>
+              )}
+              {!searching && matches.length === 0 && (
+                <div className="suggest__empty">No books match “{searchQuery.trim()}”.</div>
+              )}
+              {matches.slice(0, SUGGEST_LIMIT).map((b) => (
+                <button
+                  key={b.id}
+                  type="button"
+                  className="suggest__row"
+                  onClick={() => openBook(b)}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div className="suggest__title">{b.title}</div>
+                    <div className="suggest__meta">{b.author}{b.genre ? ` · ${b.genre}` : ""}</div>
+                  </div>
+                  <span
+                    className="suggest__side"
+                    style={{ color: b.availableQuantity > 0 ? "var(--green-700)" : "var(--red-600)" }}
+                  >
+                    {b.availableQuantity > 0 ? `${b.availableQuantity} available` : "Not available"}
+                  </span>
+                </button>
+              ))}
+              {matches.length > SUGGEST_LIMIT && (
+                <button type="button" className="link-btn" style={{ marginTop: 8, marginLeft: 12 }} onClick={handleSearch}>
+                  See all {matches.length} results
+                </button>
+              )}
+            </div>
+          )}
         </Card>
       </div>
 

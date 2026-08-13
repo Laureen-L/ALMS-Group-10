@@ -21,6 +21,30 @@ function mapBook(b) {
   };
 }
 
+// Orders results the way a reader expects. With a search term the closest
+// matches lead — an exact title, then a title starting with what was typed,
+// then a word inside the title, then the author — so the list stays useful
+// from the very first keystroke. Without one, plain alphabetical by title.
+function rankBooks(books, search = "") {
+  const q = search.trim().toLowerCase();
+  const byTitle = (a, b) => (a.title || "").localeCompare(b.title || "");
+  if (!q) return [...books].sort(byTitle);
+
+  const score = (b) => {
+    const title = (b.title || "").toLowerCase();
+    const author = (b.author || "").toLowerCase();
+    if (title === q) return 0;
+    if (title.startsWith(q)) return 1;
+    if (title.split(/\s+/).some((w) => w.startsWith(q))) return 2;
+    if (title.includes(q)) return 3;
+    if (author.startsWith(q)) return 4;
+    if (author.includes(q)) return 5;
+    return 6; // matched on something else (genre, ISBN) — keep it, but last.
+  };
+
+  return [...books].sort((a, b) => score(a) - score(b) || byTitle(a, b));
+}
+
 const MOCK_BOOKS = [
   { id: 1, title: "The Pragmatic Programmer", author: "David Thomas", genre: "Computer Science", isbn: "978-0135957059", available: true, availableQuantity: 3, qty: 5 },
   { id: 2, title: "Clean Code", author: "Robert C. Martin", genre: "Software Engineering", isbn: "978-0132350884", available: true, availableQuantity: 2, qty: 3 },
@@ -42,7 +66,7 @@ export async function getBooks({ search = "", genre = "" } = {}) {
     if (genre && genre !== "All") {
       results = results.filter(b => b.genre === genre);
     }
-    return results;
+    return rankBooks(results, search);
   }
 
   const params = new URLSearchParams();
@@ -50,7 +74,7 @@ export async function getBooks({ search = "", genre = "" } = {}) {
   if (genre) params.set("genre", genre);
   const qs = params.toString();
   const data = await api.get(`/books${qs ? `?${qs}` : ""}`);
-  return (Array.isArray(data) ? data : []).map(mapBook);
+  return rankBooks((Array.isArray(data) ? data : []).map(mapBook), search);
 }
 
 // GET /books/genres -> [{ genre, count }] sorted alphabetically.

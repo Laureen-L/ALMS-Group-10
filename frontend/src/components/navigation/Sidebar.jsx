@@ -1,24 +1,31 @@
 // Sidebar — config-driven. Pass the role; links come from navConfig.
 // Highlights the active route automatically via NavLink.
+// Below 900px this becomes an off-canvas drawer; `open` slides it in and the
+// close button (plus the overlay the shell renders) puts it away again.
 import { NavLink } from "react-router-dom";
-import { BookOpen, Settings, LogOut } from "lucide-react";
+import { BookOpen, Settings, LogOut, X } from "lucide-react";
 import { NAV, BRAND } from "./navConfig.js";
 import { useAuth } from "../../context/AuthContext.jsx";
 import Badge from "../ui/Badge.jsx";
 
-export default function Sidebar({ role, cream, badges = {} }) {
+export default function Sidebar({ role, cream, badges = {}, open = false, onClose }) {
   const { logout } = useAuth();
   const links = NAV[role] || [];
   const brand = BRAND[role] || { title: "Library", sub: "" };
 
   return (
-    <aside className={["sidebar", cream && "sidebar--cream"].filter(Boolean).join(" ")}>
+    <aside className={["sidebar", cream && "sidebar--cream", open && "sidebar--open"].filter(Boolean).join(" ")}>
       <div className="sidebar__brand">
         <BookOpen size={22} color="var(--green-700)" />
         <div>
           <div className="sidebar__brand-title">{brand.title}</div>
           <div className="sidebar__brand-sub">{brand.sub}</div>
         </div>
+        {onClose && (
+          <button className="sidebar__close" aria-label="Close menu" onClick={onClose}>
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       <nav className="sidebar__nav">
