@@ -11,6 +11,12 @@ const SELF_SERVICE_ROLES = ['student', 'librarian'];
 // a real hash is stored here.
 const AUTH_MANAGED_PASSWORD = 'managed_by_supabase_auth';
 
+// Where Supabase sends people after they click a link in one of its emails.
+// Must also be listed under Authentication > URL Configuration > Redirect URLs
+// in the Supabase dashboard, or Supabase ignores it and falls back to Site URL.
+// Set FRONTEND_URL to the deployed origin in production.
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/$/, '');
+
 // 1. POST /api/auth/register
 const register = async (req, res) => {
   const { email, password, full_name, name, role } = req.body;
@@ -39,7 +45,13 @@ const register = async (req, res) => {
       // Carry identity in the auth record itself. public.users may be
       // unreadable under RLS, and this is the only copy of the role that is
       // always available — see resolveIdentity() in authMiddleware.
-      options: { data: { full_name: fullName, role: requestedRole } },
+      options: {
+        data: { full_name: fullName, role: requestedRole },
+        // Land on the sign-in page after confirming. Without this they arrive
+        // at the app root and get bounced around by HomeRedirect, which reads
+        // as "did that work?" right after clicking a confirmation link.
+        emailRedirectTo: `${FRONTEND_URL}/login`,
+      },
     });
 
     if (error) {
@@ -136,7 +148,11 @@ const resendConfirmation = async (req, res) => {
   try {
     // authClient(), not the shared client — same reason as sign-in: this
     // touches auth state and must not leave anything on a shared client.
-    const { error } = await authClient().auth.resend({ type: 'signup', email });
+    const { error } = await authClient().auth.resend({
+      type: 'signup',
+      email,
+      options: { emailRedirectTo: `${FRONTEND_URL}/login` },
+    });
 
     if (error) {
       console.warn('resendConfirmation:', error.message);
@@ -170,7 +186,16 @@ const forgotPassword = async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email);
+    // redirectTo is not optional in practice. Without it the emailed link goes
+    // to Site URL — the app's root — and ResetPasswordPage never opens, so the
+    // recovery token in the URL fragment is thrown away and the reset silently
+    // does nothing.
+    //
+    // authClient(), not the shared client: that one holds the service role key,
+    // which has no business being sent to GoTrue on a public reset request.
+    const { error } = await authClient().auth.resetPasswordForEmail(email, {
+      redirectTo: `${FRONTEND_URL}/reset-password`,
+    });
 
     if (error) {
       console.error('Supabase reset password error:', {
