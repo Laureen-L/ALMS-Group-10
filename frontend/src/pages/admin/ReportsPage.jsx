@@ -102,7 +102,7 @@ export default function ReportsPage() {
       <h1 className="page-title">Library Reports</h1>
       <p className="page-sub">Collection, lending and overdue analytics.</p>
 
-      <div className="detail-grid" style={{ gridTemplateColumns: "1fr 1fr", alignItems: "stretch" }}>
+      <div className="detail-grid detail-grid--even" style={{ alignItems: "stretch" }}>
         <Card title="Collection by Genre">
           <DonutChart data={genres} labelKey="genre" valueKey="count" />
         </Card>
@@ -139,7 +139,7 @@ export default function ReportsPage() {
         </Card>
       </div>
 
-      <div className="detail-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 22 }}>
+      <div className="detail-grid detail-grid--even" style={{ marginTop: 22 }}>
         <Card title="Top 10 Most Borrowed Books">
           <RankedBars
             items={topBooks}

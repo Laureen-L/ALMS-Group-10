@@ -104,7 +104,7 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="detail-grid" style={{ gridTemplateColumns: "1fr 340px" }}>
+      <div className="detail-grid detail-grid--aside">
         <Card title="Personal Information">
           {saveError && <p className="field__error" style={{ marginBottom: 12 }}>{saveError.message}</p>}
           {saved && !isEditing && (
