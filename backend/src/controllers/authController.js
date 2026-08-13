@@ -4,7 +4,7 @@ const { resolveIdentity } = require('../middleware/authMiddleware');
 
 // Roles a user is allowed to pick for themselves at sign-up.
 // 'admin' is deliberately excluded — it can only be granted by an existing admin.
-const SELF_SERVICE_ROLES = ['student', 'librarian'];
+const SELF_SERVICE_ROLES = ['student'];
 
 // public.users.password_hash is NOT NULL, but credentials actually live in
 // Supabase Auth. This sentinel satisfies the constraint without implying that

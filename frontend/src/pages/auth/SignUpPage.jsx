@@ -1,10 +1,11 @@
 // Auth — Create account. Registers against POST /auth/register, then sends
 // the new member to the login screen.
-// Admin is deliberately not offered: the backend rejects self-registered admins.
+// All new accounts are created as students. Librarian and admin roles are
+// assigned exclusively by an admin.
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import Input from "../../components/ui/Input.jsx";
-import Select from "../../components/ui/Select.jsx";
+
 import Button from "../../components/ui/Button.jsx";
 import { register } from "../../services/authService.js";
 import { validateEmail, validateRequired, validatePassword, validateMatch } from "../../utils/validators.js";
@@ -16,7 +17,7 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("student");
+
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
 
@@ -33,7 +34,7 @@ export default function SignUpPage() {
 
     setBusy(true);
     try {
-      const res = await register({ full_name: fullName, email, password, role });
+      const res = await register({ full_name: fullName, email, password, role: "student" });
       // Whether a confirmation email is required is a Supabase project setting,
       // so only the backend's response knows. Promising "sign in to continue"
       // unconditionally sends people to a login that rejects them until they
@@ -78,13 +79,7 @@ export default function SignUpPage() {
           id="confirm_password" label="Confirm password" type="password" placeholder="Re-enter your password"
           value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} error={errors.confirmPassword}
         />
-        <Select
-          id="role" label="I am a" value={role} onChange={(e) => setRole(e.target.value)}
-          options={[
-            { value: "student", label: "Student" },
-            { value: "librarian", label: "Librarian" },
-          ]}
-        />
+
 
         <Button type="submit" variant="green" block disabled={busy}>
           {busy ? "Creating account…" : "Create Account"}

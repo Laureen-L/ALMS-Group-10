@@ -7,7 +7,7 @@ export async function login(email, password) {
 }
 
 // POST /auth/register -> { success, needsConfirmation, message, user }
-// role may be "student" or "librarian"; the backend rejects "admin".
+// role is always "student"; the backend rejects "librarian" and "admin".
 //
 // needsConfirmation is true when Supabase is holding the account until the
 // emailed link is clicked, so the caller knows not to promise an immediate
