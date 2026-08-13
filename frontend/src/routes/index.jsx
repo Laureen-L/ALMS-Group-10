@@ -76,9 +76,7 @@ const staffRoutes = (
     <Route path="members/:memberId" element={<MemberDetail />} />
     <Route path="overdue" element={<OverdueLoansPage />} />
     <Route path="due-soon" element={<DueSoonPage />} />
-    <Route path="inventory" element={<InventoryPage />} />
     <Route path="fines" element={<FinesPage />} />
-    <Route path="reports" element={<Reports />} />
   </>
 );
 
@@ -130,6 +128,8 @@ export default function AppRoutes() {
           <Route path="audit" element={<AuditLog />} />
           <Route path="settings" element={<SystemSettings />} />
           {staffRoutes}
+          <Route path="inventory" element={<InventoryPage />} />
+          <Route path="reports" element={<Reports />} />
           <Route path="overdue-loans" element={<Navigate to="/admin/overdue" replace />} />
         </Route>
 

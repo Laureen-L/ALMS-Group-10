@@ -27,10 +27,8 @@ export const NAV = {
     { to: "/librarian/fines",       label: "Fines",              icon: Coins },
     { to: "/librarian/catalog",     label: "Browse Books",       icon: BookOpen },
     { to: "/librarian/books/new",   label: "Add New Book",       icon: PlusSquare },
-    { to: "/librarian/inventory",   label: "Inventory",          icon: Boxes },
     { to: "/librarian/members",     label: "Members",            icon: Users },
     { to: "/librarian/activity",    label: "Borrowing Activity", icon: ClipboardList },
-    { to: "/librarian/reports",     label: "Collection Insights", icon: BarChart3 },
     { to: "/profile",               label: "Profile",            icon: User },
   ],
   admin: [

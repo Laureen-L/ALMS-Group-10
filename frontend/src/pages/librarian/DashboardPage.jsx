@@ -22,7 +22,6 @@ import DataTable from "../../components/tables/DataTable.jsx";
 import StatusBadge from "../../components/tables/StatusBadge.jsx";
 import LineChart from "../../components/charts/LineChart.jsx";
 import { getLibrarianDashboard, getDueSoon } from "../../services/adminService.js";
-import { getLowStock } from "../../services/bookService.js";
 import { getFines, formatMoney } from "../../services/fineService.js";
 import { getTrendsReport } from "../../services/reportService.js";
 
@@ -44,7 +43,6 @@ export default function LibrarianDashboardPage() {
   const [dash, setDash] = useState({ stats: {}, recentActivity: [], overdueList: [] });
   const [trends, setTrends] = useState([]);
   const [dueSoon, setDueSoon] = useState([]);
-  const [lowStock, setLowStock] = useState([]);
   const [finesOwed, setFinesOwed] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -57,18 +55,16 @@ export default function LibrarianDashboardPage() {
         // Only the first call is load-bearing. The rest feed individual panels,
         // so a failure there shows one empty panel rather than blanking the
         // whole dashboard.
-        const [d, t, ds, ls, f] = await Promise.all([
+        const [d, t, ds, f] = await Promise.all([
           getLibrarianDashboard(),
           getTrendsReport().catch(() => []),
           getDueSoon().catch(() => ({ records: [] })),
-          getLowStock().catch(() => ({ books: [] })),
           getFines({ status: "unpaid" }).catch(() => ({ totals: {} })),
         ]);
         if (cancelled) return;
         setDash(d);
         setTrends(t);
         setDueSoon(ds.records || []);
-        setLowStock(ls.books || []);
         setFinesOwed(f.totals?.unpaid || 0);
       } catch (e) {
         if (!cancelled) setError(e);
@@ -120,11 +116,6 @@ export default function LibrarianDashboardPage() {
           tone={dueSoon.length > 0 ? "warning" : "neutral"} icon={CalendarClock} eyebrow="Coming up"
           value={String(dueSoon.length)} label="Due Soon"
           onClick={() => navigate("/librarian/due-soon")}
-        />
-        <StatCard
-          tone={lowStock.length > 0 ? "warning" : "neutral"} icon={Boxes} eyebrow="Stock"
-          value={String(lowStock.length)} label="Low Stock Titles"
-          onClick={() => navigate("/librarian/inventory")}
         />
         <StatCard
           tone={finesOwed > 0 ? "warning" : "neutral"} icon={Coins} eyebrow="Owed"
