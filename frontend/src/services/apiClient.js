@@ -11,7 +11,7 @@ const USER_KEY = "alms_user";
 // and takes up to a minute to boot again, so the first request after a quiet
 // spell needs room that every later request does not.
 const COLD_TIMEOUT_MS = 60000;
-const WARM_TIMEOUT_MS = 20000;
+const WARM_TIMEOUT_MS = 45000;
 
 // Flips on the first response of any kind — even a 401. Anything that came
 // back proves the server is running, which is all this tracks.
